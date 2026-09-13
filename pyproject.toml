@@ -1,0 +1,15 @@
+[project]
+name = "manutencao_preditiva"
+authors = [
+    { name = "Dércio Bobo", email = "derciobob@gmail.com" }
+]
+description = "Manutenção Preditiva - Gestão de Manutenção Preditiva de Ativos para Frappe/ERPNext"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.dev-dependencies]
