@@ -11,7 +11,10 @@ frappe.pages["registo-rapido-de-achados"].on_page_show = function (wrapper) {
 	wrapper.rra && wrapper.rra.load_saved();
 };
 
+const RRA_PAGE_SIZE = 50;
+
 const RRA_SEVERIDADE_OPTIONS = "Crítico\nAlarme\nAceitável\nBoa Condição\nNão Recolhido";
+const RRA_SEVERIDADES = RRA_SEVERIDADE_OPTIONS.split("\n");
 
 const RRA_BADGE_CLASS = {
 	Crítico: "rra-badge-critico",
@@ -26,7 +29,12 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.wrapper = wrapper;
 		this.campanha_info = null;
 		this.saved_entries = [];
+		this.saved_offset = 0;
+		this.saved_has_more = false;
+		this.active_severity = "all";
+		this.search_term = "";
 		this.area_name_cache = {};
+		this.equipamento_name_cache = {};
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
@@ -40,7 +48,14 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	render_shell() {
 		this.$container = $('<div class="rra">').appendTo(this.page.body);
 		this.render_toolbar();
+		this.$summary = $('<div class="rra-summary">').appendTo(this.$container);
+		this.render_filters();
 		this.$list = $('<div class="rra-list">').appendTo(this.$container);
+		this.$load_more_wrap = $('<div class="rra-load-more">').appendTo(this.$container).hide();
+		this.$load_more_btn = $(`<button class="rra-btn rra-btn-ghost">${__("Carregar mais")}</button>`).appendTo(
+			this.$load_more_wrap
+		);
+		this.$load_more_btn.on("click", () => this.load_saved(true));
 		this.refresh_list();
 	}
 
@@ -101,27 +116,120 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 	}
 
+	// ---- filters: search + severity chips -----------------------------------
+
+	render_filters() {
+		this.$filters = $('<div class="rra-filters">').appendTo(this.$container);
+
+		this.$search = $(
+			`<input type="text" class="rra-search" placeholder="${__("Pesquisar por equipamento, área, descrição...")}">`
+		).appendTo(this.$filters);
+		this.$search.on("input", () => {
+			this.search_term = (this.$search.val() || "").toLowerCase().trim();
+			this.apply_filters();
+		});
+
+		this.$chips = $('<div class="rra-chips">').appendTo(this.$filters);
+		const chip_defs = [["all", __("Todos")]].concat(RRA_SEVERIDADES.map((s) => [s, s]));
+		chip_defs.forEach(([key, label]) => {
+			const $chip = $(`<button class="rra-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
+				this.$chips
+			);
+			if (key === "all") $chip.addClass("active");
+			$chip.on("click", () => {
+				this.active_severity = key;
+				this.$chips.find(".rra-chip").removeClass("active");
+				$chip.addClass("active");
+				this.apply_filters();
+			});
+		});
+	}
+
+	apply_filters() {
+		let visible = 0;
+		this.saved_entries.forEach((entry) => {
+			const row = entry.data;
+			const matches_severity = this.active_severity === "all" || row.severidade === this.active_severity;
+			const haystack = [
+				row.equipamento_nome || row.equipamento_referencia,
+				row.area_nome || row.area_planta,
+				row.componente,
+				row.descricao_do_defeito,
+				row.severidade,
+			]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase();
+			const matches_search = !this.search_term || haystack.includes(this.search_term);
+			const show = matches_severity && matches_search;
+			entry.$card.toggle(show);
+			if (show) visible++;
+		});
+		this.$empty_filtered && this.$empty_filtered.remove();
+		if (this.saved_entries.length && visible === 0) {
+			this.$empty_filtered = $(`<div class="rra-empty">${__("Nenhum achado corresponde ao filtro.")}</div>`).appendTo(
+				this.$list
+			);
+		}
+	}
+
+	// ---- summary bar ----------------------------------------------------------
+
+	render_summary_bar() {
+		if (!this.saved_entries.length) {
+			this.$summary.empty();
+			return;
+		}
+		const counts = {};
+		this.saved_entries.forEach((entry) => {
+			const sev = entry.data.severidade;
+			counts[sev] = (counts[sev] || 0) + 1;
+		});
+
+		const parts = [`<span class="rra-summary-total">${this.saved_entries.length} ${__("achados")}</span>`];
+		RRA_SEVERIDADES.forEach((sev) => {
+			if (counts[sev]) {
+				parts.push(`<span class="rra-badge ${RRA_BADGE_CLASS[sev]}">${counts[sev]} ${sev}</span>`);
+			}
+		});
+		this.$summary.html(parts.join(""));
+	}
+
 	// ---- list of saved entries ---------------------------------------------
 
 	refresh_list() {
 		this.$list.empty();
+		this.render_summary_bar();
+
 		if (!this.saved_entries.length) {
 			const msg = this.campanha_info
 				? __('Ainda sem achados. Clique em "Novo Achado" para começar.')
 				: __("Selecione uma campanha para começar a registar achados.");
 			this.$list.html(`<div class="rra-empty">${msg}</div>`);
+			this.$filters.toggle(false);
+			this.$load_more_wrap.hide();
 			return;
 		}
+
+		this.$filters.toggle(true);
 		this.saved_entries.forEach((entry) => this.$list.append(entry.$card));
+		this.apply_filters();
+		this.$load_more_wrap.toggle(this.saved_has_more);
 	}
 
-	load_saved() {
+	load_saved(append) {
 		const campanha = this.campanha_control.get_value();
 		if (!campanha) {
 			this.saved_entries = [];
+			this.saved_offset = 0;
+			this.saved_has_more = false;
 			this.refresh_list();
 			return;
 		}
+		if (!append) this.saved_offset = 0;
+
+		this.$load_more_btn.prop("disabled", true).text(__("A carregar..."));
+
 		frappe
 			.call({
 				method: "frappe.client.get_list",
@@ -131,7 +239,9 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 					fields: [
 						"name",
 						"area_planta",
+						"area_planta.area as area_nome",
 						"equipamento_referencia",
+						"equipamento_referencia.equipamento as equipamento_nome",
 						"componente",
 						"severidade",
 						"descricao_do_defeito",
@@ -139,15 +249,24 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 						"creation",
 					],
 					order_by: "creation desc",
-					limit_page_length: 50,
+					limit_start: this.saved_offset,
+					limit_page_length: RRA_PAGE_SIZE,
 				},
 			})
 			.then((r) => {
-				this.saved_entries = (r.message || []).map((row) => ({ data: row }));
-				this.saved_entries.forEach((entry) => {
+				const rows = r.message || [];
+				const new_entries = rows.map((row) => ({ data: row }));
+				new_entries.forEach((entry) => {
 					entry.$card = this.build_view_card(entry);
 				});
+
+				this.saved_entries = append ? this.saved_entries.concat(new_entries) : new_entries;
+				this.saved_offset += rows.length;
+				this.saved_has_more = rows.length === RRA_PAGE_SIZE;
 				this.refresh_list();
+			})
+			.always(() => {
+				this.$load_more_btn.prop("disabled", false).text(__("Carregar mais"));
 			});
 	}
 
@@ -168,6 +287,23 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 	}
 
+	resolve_equipamento_label(code, $el) {
+		if (!code) {
+			$el.text("");
+			return;
+		}
+		if (this.equipamento_name_cache[code]) {
+			$el.text(this.equipamento_name_cache[code]);
+			return;
+		}
+		$el.text(code);
+		frappe.db.get_value("Equipamento De Inspecao", code, "equipamento").then((r) => {
+			const label = (r.message && r.message.equipamento) || code;
+			this.equipamento_name_cache[code] = label;
+			$el.text(label);
+		});
+	}
+
 	// ---- saved (summary) card ------------------------------------------------
 
 	build_view_card(entry) {
@@ -183,13 +319,23 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		$(`<span class="rra-badge ${badge_class}">`).text(row.severidade || "").appendTo($row);
 
 		const $main = $('<div class="rra-saved-main">').appendTo($row);
-		const title = [row.equipamento_referencia, row.componente].filter(Boolean).join(" · ");
-		$('<div class="rra-saved-title">').text(title).appendTo($main);
+		const $title = $('<div class="rra-saved-title">').appendTo($main);
+		const $equip = $("<span>").appendTo($title);
+		if (row.equipamento_nome) {
+			$equip.text(row.equipamento_nome);
+		} else {
+			this.resolve_equipamento_label(row.equipamento_referencia, $equip);
+		}
+		if (row.componente) $title.append(document.createTextNode(" · " + row.componente));
 		$('<div class="rra-saved-sub">').text(row.descricao_do_defeito || "").appendTo($main);
 
 		const $meta = $('<div class="rra-saved-meta">').appendTo($row);
 		const $area = $("<span>").appendTo($meta);
-		this.resolve_area_label(row.area_planta, $area);
+		if (row.area_nome) {
+			$area.text(row.area_nome);
+		} else {
+			this.resolve_area_label(row.area_planta, $area);
+		}
 		$("<span>&middot;</span>").appendTo($meta);
 		$("<span>").html(comment_when(row.creation)).appendTo($meta);
 
@@ -222,11 +368,18 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				reqd: 1,
 			},
 			{ fieldtype: "Section Break" },
-			{ fieldtype: "Data", fieldname: "equipamento_referencia", label: __("Referência do Equipamento"), reqd: 1 },
+			{
+				fieldtype: "Link",
+				fieldname: "equipamento_referencia",
+				label: __("Referência do Equipamento"),
+				options: "Equipamento De Inspecao",
+				reqd: 1,
+				get_query: () => ({
+					filters: { cliente: this.campanha_info ? this.campanha_info.cliente : "" },
+				}),
+			},
 			{ fieldtype: "Column Break" },
 			{ fieldtype: "Int", fieldname: "item", label: __("Item (Nº)") },
-			{ fieldtype: "Section Break" },
-			{ fieldtype: "Small Text", fieldname: "equipamento_descricao", label: __("Descrição do Equipamento") },
 			{ fieldtype: "Section Break" },
 			{ fieldtype: "Data", fieldname: "componente", label: __("Componente / Localização do Defeito") },
 			{ fieldtype: "Column Break" },
@@ -339,6 +492,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 					const $old_card = entry.$card;
 					entry.$card = this.build_view_card(entry);
 					$old_card.replaceWith(entry.$card);
+					this.apply_filters();
 				}
 			})
 			.always(() => {

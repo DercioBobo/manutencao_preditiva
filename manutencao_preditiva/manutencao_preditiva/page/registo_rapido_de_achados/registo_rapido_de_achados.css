@@ -98,6 +98,16 @@
 	background: #0f6b63;
 }
 
+.rra-btn-ghost {
+	background: transparent;
+	border-color: var(--rra-line);
+	color: var(--rra-ink);
+}
+
+.rra-btn-ghost:hover:not(:disabled) {
+	background: var(--rra-surface-2);
+}
+
 .rra-icon-plus {
 	position: relative;
 	display: inline-block;
@@ -124,6 +134,83 @@
 	width: 2px;
 	height: 12px;
 	transform: translate(-50%, -50%);
+}
+
+/* ---- summary bar -------------------------------------------------------- */
+
+.rra-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 14px;
+}
+
+.rra-summary-total {
+	font-weight: 700;
+	font-size: 14px;
+	margin-right: 4px;
+}
+
+/* ---- filters: search + severity chips ------------------------------------ */
+
+.rra-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 14px;
+}
+
+.rra-search {
+	flex: 1 1 260px;
+	max-width: 380px;
+	padding: 8px 12px;
+	font-size: 13px;
+	border: 1px solid var(--rra-line);
+	border-radius: 8px;
+	outline: none;
+	transition: border-color 0.12s ease;
+}
+
+.rra-search:focus {
+	border-color: var(--rra-accent);
+}
+
+.rra-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.rra-chip {
+	border: 1px solid var(--rra-line);
+	background: var(--rra-surface);
+	color: var(--rra-muted);
+	border-radius: 20px;
+	padding: 5px 12px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.12s ease;
+}
+
+.rra-chip:hover {
+	background: var(--rra-surface-2);
+}
+
+.rra-chip.active {
+	background: var(--rra-ink);
+	border-color: var(--rra-ink);
+	color: #fff;
+}
+
+/* ---- load more ------------------------------------------------------------ */
+
+.rra-load-more {
+	display: flex;
+	justify-content: center;
+	margin-top: 16px;
 }
 
 /* ---- list of saved-entry cards ---------------------------------------- */
