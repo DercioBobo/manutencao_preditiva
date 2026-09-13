@@ -27,14 +27,34 @@ total) e **Cliente Portal** (leitura + resposta apenas).
 
 ### Importar os trackers históricos (Excel)
 
-`manutencao_preditiva/setup/import_action_trackers.py` importa os ficheiros
-"Action Tracker" (vibração e termografia) para estes dois doctypes. É uma
-importação pontual, não corre automaticamente no `bench migrate` — requer
-`openpyxl` no ambiente do bench e é invocada manualmente:
+Os dois ficheiros "Action Tracker" originais (vibração e termografia) já
+foram extraídos localmente para `manutencao_preditiva/setup/data/achados_import.json`
+— um ficheiro plano, sem dependência de `openpyxl`, que viaja com a app no
+git. Os `.xlsx` originais nunca são commitados (ver `.gitignore`).
+
+Depois de instalar a app no site (`bench get-app` + `bench migrate`), basta
+correr, sem argumentos — não precisa de `openpyxl` no bench nem de fazer
+upload de nada:
 
 ```bash
-bench --site <site> execute manutencao_preditiva.setup.import_action_trackers.run \
-  --kwargs "{'vibration_file': '/caminho/para/FR.TEC.014...xlsx', 'thermography_file': '/caminho/para/FR.TEC.016...xlsx'}"
+bench --site <site> execute manutencao_preditiva.setup.import_action_trackers.load_from_json
+```
+
+É seguro correr mais do que uma vez — verifica registos existentes antes de
+criar duplicados. Cria os Customers "Kenmare"/"CLN" se ainda não existirem,
+depois as 2 Campanhas e os 321 Achados.
+
+Se um dos ficheiros Excel de origem for alterado, corra isto localmente
+(precisa de `openpyxl`, não de frappe) para regenerar o JSON antes de
+fazer commit:
+
+```bash
+python -c "
+from manutencao_preditiva.setup.import_action_trackers import extract_to_json
+extract_to_json(
+    vibration_file='FR.TEC.014...xlsx',
+    thermography_file='FR.TEC.016...xlsx',
+)"
 ```
 
 ## License

@@ -3,7 +3,9 @@ __pycache__/
 *.egg-info
 .idea
 
-# Client source data used for one-off imports - never commit customer
-# spreadsheets/photos into the app repo.
+# Client source data used for one-off imports - never commit the raw
+# customer spreadsheets/photos (the extracted JSON in setup/data/ is fine
+# and IS committed - it's already de-identified into plain field values).
 *.xlsx
 *.xls
+/achados.json
