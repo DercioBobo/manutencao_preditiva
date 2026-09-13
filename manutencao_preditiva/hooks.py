@@ -20,8 +20,17 @@ required_apps = ["erpnext"]
 
 # Fixtures
 # --------
-# No fixtures yet - add once roles/workflows are defined alongside the
-# first doctypes.
+# Exported so `bench get-app` + `bench migrate` reproduces the two roles
+# out of the box. "Cliente Portal" is restricted per-client via a User
+# Permission on Customer (Setup -> User Permissions) - it then only ever
+# sees/edits the Achado De Inspecao rows for its own Customer.
+
+fixtures = [
+	{
+		"dt": "Role",
+		"filters": [["name", "in", ["Tecnico de Inspecao", "Cliente Portal"]]],
+	},
+]
 
 # Document Events
 # ---------------

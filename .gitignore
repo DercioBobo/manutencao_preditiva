@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 *.egg-info
 .idea
+
+# Client source data used for one-off imports - never commit customer
+# spreadsheets/photos into the app repo.
+*.xlsx
+*.xls

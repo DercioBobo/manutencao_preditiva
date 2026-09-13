@@ -1,0 +1,14 @@
+[
+ {
+  "doctype": "Role",
+  "name": "Tecnico de Inspecao",
+  "role_name": "Tecnico de Inspecao",
+  "desk_access": 1
+ },
+ {
+  "doctype": "Role",
+  "name": "Cliente Portal",
+  "role_name": "Cliente Portal",
+  "desk_access": 1
+ }
+]
