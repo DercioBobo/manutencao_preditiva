@@ -5,7 +5,6 @@
 	--rra-surface: #ffffff;
 	--rra-surface-2: #f7f9fa;
 	--rra-accent: #14877e;
-	--rra-accent-soft: #e3f4f2;
 	--rra-red: #c4453a;
 	--rra-amber: #d99226;
 	--rra-yellow: #b8a021;
@@ -99,35 +98,7 @@
 	background: #0f6b63;
 }
 
-.rra-btn-ghost {
-	background: transparent;
-	border-color: var(--rra-line);
-	color: var(--rra-ink);
-}
-
-.rra-btn-ghost:hover:not(:disabled) {
-	background: var(--rra-surface-2);
-}
-
-.rra-btn-icon {
-	padding: 6px;
-	border-radius: 7px;
-	background: transparent;
-	color: var(--rra-muted);
-}
-
-.rra-btn-icon:hover {
-	background: var(--rra-surface-2);
-	color: var(--rra-ink);
-}
-
-.rra-btn svg {
-	width: 14px;
-	height: 14px;
-}
-
-.rra-icon-plus,
-.rra-icon-close {
+.rra-icon-plus {
 	position: relative;
 	display: inline-block;
 	width: 12px;
@@ -135,9 +106,7 @@
 }
 
 .rra-icon-plus::before,
-.rra-icon-plus::after,
-.rra-icon-close::before,
-.rra-icon-close::after {
+.rra-icon-plus::after {
 	content: "";
 	position: absolute;
 	top: 50%;
@@ -157,24 +126,12 @@
 	transform: translate(-50%, -50%);
 }
 
-.rra-icon-close::before {
-	width: 12px;
-	height: 2px;
-	transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.rra-icon-close::after {
-	width: 12px;
-	height: 2px;
-	transform: translate(-50%, -50%) rotate(-45deg);
-}
-
-/* ---- list of entry cards ---------------------------------------------- */
+/* ---- list of saved-entry cards ---------------------------------------- */
 
 .rra-list {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
+	gap: 10px;
 }
 
 .rra-card {
@@ -183,125 +140,7 @@
 	border-left: 4px solid var(--rra-line);
 	border-radius: var(--rra-radius);
 	box-shadow: var(--rra-shadow);
-	transition: box-shadow 0.15s ease, transform 0.15s ease;
-}
-
-.rra-card-draft {
-	border-left-color: var(--rra-accent);
-}
-
-.rra-card-editing {
-	border-left-color: var(--rra-amber);
-}
-
-.rra-card-draft:hover,
-.rra-card-editing:hover {
-	box-shadow: 0 2px 4px rgba(20, 30, 38, 0.06), 0 8px 20px rgba(20, 30, 38, 0.06);
-}
-
-.rra-diff-preview {
-	font-size: 11px;
-	color: var(--rra-muted);
-	margin: -6px 0 10px;
-	min-height: 14px;
-}
-
-.rra-card-header {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 14px 18px;
-	flex-wrap: wrap;
-}
-
-.rra-card-header .rra-field {
-	margin-bottom: 0;
-}
-
-.rra-card-header .rra-field-area {
-	width: 220px;
-}
-
-.rra-card-header .rra-field-severidade {
-	width: 170px;
-}
-
-.rra-card-status {
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	padding: 3px 9px;
-	border-radius: 20px;
-	background: var(--rra-accent-soft);
-	color: var(--rra-accent);
-}
-
-.rra-card-actions {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	margin-left: auto;
-}
-
-.rra-card-body {
-	padding: 2px 18px 16px;
-}
-
-.rra-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 2px 20px;
-}
-
-.rra-field {
-	margin-bottom: 12px;
-}
-
-.rra-field.rra-span-2 {
-	grid-column: 1 / -1;
-}
-
-.rra-field .control-label {
-	font-size: 11px;
-	color: var(--rra-muted);
-}
-
-.rra-field.rra-invalid .control-input-wrapper,
-.rra-field.rra-invalid textarea {
-	box-shadow: 0 0 0 1px var(--rra-red);
-	border-radius: 6px;
-}
-
-.rra-thermo-section {
-	background: var(--rra-surface-2);
-	border-radius: 8px;
-	padding: 12px 14px 0;
-	margin: 4px 0 12px;
-}
-
-.rra-thermo-section .rra-grid {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.rra-card-error {
-	font-size: 12px;
-	color: var(--rra-red);
-	background: #fbecea;
-	border-radius: 7px;
-	padding: 8px 12px;
-	margin-bottom: 12px;
-	display: none;
-}
-
-.rra-card-error.rra-show {
-	display: block;
-}
-
-/* ---- saved (collapsed) card ------------------------------------------- */
-
-.rra-card-saved {
-	border-left-color: var(--rra-line);
+	transition: box-shadow 0.15s ease;
 }
 
 .rra-saved-row {
@@ -328,16 +167,6 @@
 	background: var(--rra-surface-2);
 }
 
-.rra-saved-chevron {
-	flex: 0 0 auto;
-	width: 8px;
-	height: 8px;
-	border-right: 2px solid var(--rra-muted);
-	border-bottom: 2px solid var(--rra-muted);
-	transform: rotate(45deg);
-	margin: 0 6px 0 2px;
-}
-
 .rra-saved-main {
 	flex: 1 1 auto;
 	min-width: 240px;
@@ -362,11 +191,7 @@
 	gap: 10px;
 	color: var(--rra-muted);
 	font-size: 12px;
-}
-
-.rra-saved-meta a {
-	color: var(--rra-accent);
-	font-weight: 600;
+	flex: 0 0 auto;
 }
 
 .rra-badge {
@@ -411,16 +236,7 @@
 }
 
 @media (max-width: 720px) {
-	.rra-grid,
-	.rra-thermo-section .rra-grid {
-		grid-template-columns: 1fr;
-	}
-	.rra-field.rra-span-2 {
-		grid-column: 1;
-	}
-	.rra-toolbar-fields .rra-field,
-	.rra-card-header .rra-field-area,
-	.rra-card-header .rra-field-severidade {
+	.rra-toolbar-fields .rra-field {
 		width: 100%;
 	}
 }

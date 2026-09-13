@@ -21,43 +21,10 @@ const RRA_BADGE_CLASS = {
 	"Não Recolhido": "rra-badge-nao-recolhido",
 };
 
-// Mirrors achado_de_inspecao.json exactly: these are the fields shown to
-// técnicos (the "Resposta do Cliente" section is deliberately excluded -
-// that's for the client to fill in later, not the field operator).
-const RRA_FIELD_DEFS = [
-	{ fieldname: "equipamento_referencia", fieldtype: "Data", label: __("Referência do Equipamento"), reqd: 1 },
-	{ fieldname: "item", fieldtype: "Int", label: __("Item (Nº)") },
-	{ fieldname: "equipamento_descricao", fieldtype: "Small Text", label: __("Descrição do Equipamento"), span2: true },
-	{ fieldname: "componente", fieldtype: "Data", label: __("Componente / Localização do Defeito") },
-	{ fieldname: "ordem_de_servico", fieldtype: "Data", label: __("Ordem de Serviço") },
-	{
-		fieldname: "descricao_do_defeito",
-		fieldtype: "Small Text",
-		label: __("Descrição do Defeito"),
-		reqd: 1,
-		span2: true,
-	},
-	{ fieldname: "acao_recomendada", fieldtype: "Small Text", label: __("Ação Recomendada"), span2: true },
-	{ fieldname: "plano_de_monitorizacao", fieldtype: "Data", label: __("Plano de Monitorização") },
-	{ fieldname: "numero_da_imagem", fieldtype: "Data", label: __("Número da Imagem (Origem)") },
-	{ fieldname: "imagem", fieldtype: "Attach Image", label: __("Imagem") },
-];
-
-// Only shown when the campaign's técnica is Termografia (matches the
-// doctype's own depends_on on the sb_temperaturas section).
-const RRA_THERMO_FIELD_DEFS = [
-	{ fieldname: "temp_max_operacao", fieldtype: "Float", label: __("Temp. Máx. Operação (°C)") },
-	{ fieldname: "temp_actual", fieldtype: "Float", label: __("Temp. Actual (°C)") },
-	{ fieldname: "temp_ambiente", fieldtype: "Float", label: __("Temp. Ambiente (°C)") },
-];
-
-let rra_entry_seq = 0;
-
 manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	constructor(wrapper) {
 		this.wrapper = wrapper;
 		this.campanha_info = null;
-		this.drafts = [];
 		this.saved_entries = [];
 		this.area_name_cache = {};
 
@@ -107,11 +74,10 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				<span class="rra-icon-plus"></span><span>${__("Novo Achado")}</span>
 			</button>
 		`).appendTo($actions);
-		this.$add_btn.on("click", () => this.add_draft());
+		this.$add_btn.on("click", () => this.open_achado_dialog({ mode: "new" }));
 	}
 
 	on_campanha_change() {
-		this.drafts = [];
 		const campanha = this.campanha_control.get_value();
 
 		if (!campanha) {
@@ -135,18 +101,17 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 	}
 
-	// ---- list rendering ----------------------------------------------------
+	// ---- list of saved entries ---------------------------------------------
 
 	refresh_list() {
 		this.$list.empty();
-		if (!this.drafts.length && !this.saved_entries.length) {
+		if (!this.saved_entries.length) {
 			const msg = this.campanha_info
 				? __('Ainda sem achados. Clique em "Novo Achado" para começar.')
 				: __("Selecione uma campanha para começar a registar achados.");
 			this.$list.html(`<div class="rra-empty">${msg}</div>`);
 			return;
 		}
-		this.drafts.forEach((entry) => this.$list.append(entry.$card));
 		this.saved_entries.forEach((entry) => this.$list.append(entry.$card));
 	}
 
@@ -178,42 +143,12 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				},
 			})
 			.then((r) => {
-				this.saved_entries = (r.message || []).map((row) => ({ mode: "view", data: row }));
+				this.saved_entries = (r.message || []).map((row) => ({ data: row }));
 				this.saved_entries.forEach((entry) => {
 					entry.$card = this.build_view_card(entry);
 				});
 				this.refresh_list();
 			});
-	}
-
-	// ---- shared field helpers ------------------------------------------------
-
-	make_field(container, df, span2) {
-		const $wrap = $(`<div class="rra-field${span2 ? " rra-span-2" : ""}">`).appendTo(container);
-		const control = frappe.ui.form.make_control({ df, parent: $wrap[0], render_input: true });
-		control.$wrapper_field = $wrap;
-		control.refresh();
-		return control;
-	}
-
-	build_fields(container, defs, prefill) {
-		const controls = {};
-		defs.forEach((def) => {
-			const control = this.make_field(
-				container,
-				{
-					fieldtype: def.fieldtype,
-					fieldname: def.fieldname,
-					label: def.label,
-					reqd: def.reqd || 0,
-				},
-				def.span2
-			);
-			const value = prefill && prefill[def.fieldname];
-			if (value !== undefined && value !== null && value !== "") control.set_value(value);
-			controls[def.fieldname] = control;
-		});
-		return controls;
 	}
 
 	resolve_area_label(code, $el) {
@@ -233,193 +168,12 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 	}
 
-	// ---- editable card (used for both "new" drafts and "editing" a saved entry) --
-
-	build_editable_card(entry) {
-		const is_new = entry.mode === "new";
-		const prefill = is_new ? null : entry.data;
-
-		const $card = $(`<div class="rra-card ${is_new ? "rra-card-draft" : "rra-card-editing"}">`);
-		const $header = $('<div class="rra-card-header">').appendTo($card);
-
-		const $area_wrap = $('<div class="rra-field rra-field-area">').appendTo($header);
-		entry.area_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Link",
-				fieldname: "area_planta",
-				label: __("Área / Planta"),
-				options: "Area De Inspecao",
-				reqd: 1,
-				get_query: () => ({
-					filters: { cliente: this.campanha_info ? this.campanha_info.cliente : "" },
-				}),
-			},
-			parent: $area_wrap[0],
-			render_input: true,
-		});
-		entry.area_control.$wrapper_field = $area_wrap;
-		entry.area_control.refresh();
-		if (prefill && prefill.area_planta) {
-			entry.area_control.set_value(prefill.area_planta);
-		} else if (is_new && this.last_area_value) {
-			entry.area_control.set_value(this.last_area_value);
-		}
-
-		const $sev_wrap = $('<div class="rra-field rra-field-severidade">').appendTo($header);
-		entry.severidade_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Select",
-				fieldname: "severidade",
-				label: __("Severidade"),
-				options: RRA_SEVERIDADE_OPTIONS,
-				reqd: 1,
-			},
-			parent: $sev_wrap[0],
-			render_input: true,
-		});
-		entry.severidade_control.$wrapper_field = $sev_wrap;
-		entry.severidade_control.refresh();
-		if (prefill && prefill.severidade) entry.severidade_control.set_value(prefill.severidade);
-
-		$('<span class="rra-card-status">').text(is_new ? __("Rascunho") : __("A Editar")).appendTo($header);
-
-		const $actions = $('<div class="rra-card-actions">').appendTo($header);
-		const $cancel = $(
-			`<button class="rra-btn rra-btn-icon" title="${is_new ? __("Descartar") : __("Cancelar")}"><span class="rra-icon-close"></span></button>`
-		).appendTo($actions);
-		$cancel.on("click", () => (is_new ? this.discard_draft(entry) : this.cancel_edit(entry)));
-
-		entry.$save_btn = $(
-			`<button class="rra-btn rra-btn-primary">${is_new ? __("Guardar") : __("Guardar Alterações")}</button>`
-		).appendTo($actions);
-		entry.$save_btn.on("click", () => (is_new ? this.save_draft(entry) : this.save_edit(entry)));
-
-		entry.$error = $('<div class="rra-card-error">').insertAfter($header);
-
-		const $body = $('<div class="rra-card-body">').appendTo($card);
-		const $grid = $('<div class="rra-grid">').appendTo($body);
-		entry.fields = this.build_fields($grid, RRA_FIELD_DEFS, prefill);
-
-		const is_termografia = !!(this.campanha_info && this.campanha_info.tecnica === "Termografia");
-		entry.$thermo = $('<div class="rra-thermo-section">').appendTo($body).toggle(is_termografia);
-		$('<div style="font-size:11px;font-weight:600;color:var(--rra-muted);margin-bottom:6px;">')
-			.text(__("Leituras de Temperatura"))
-			.appendTo(entry.$thermo);
-		const $thermo_grid = $('<div class="rra-grid">').appendTo(entry.$thermo);
-		const thermo_controls = this.build_fields($thermo_grid, RRA_THERMO_FIELD_DEFS, prefill);
-		Object.assign(entry.fields, thermo_controls);
-
-		const $diff_preview = $('<div class="rra-diff-preview">').appendTo(entry.$thermo);
-		const update_diff_preview = () => {
-			const max = parseFloat(entry.fields.temp_max_operacao.get_value());
-			const actual = parseFloat(entry.fields.temp_actual.get_value());
-			if (!isNaN(max) && !isNaN(actual)) {
-				$diff_preview.text(__("Diferença sobre máx.: {0} °C", [(actual - max).toFixed(1)]));
-			} else {
-				$diff_preview.text("");
-			}
-		};
-		thermo_controls.temp_max_operacao.$input && thermo_controls.temp_max_operacao.$input.on("input", update_diff_preview);
-		thermo_controls.temp_actual.$input && thermo_controls.temp_actual.$input.on("input", update_diff_preview);
-		update_diff_preview();
-
-		return $card;
-	}
-
-	get_required_controls(entry) {
-		return [
-			{ control: entry.area_control, label: __("Área / Planta") },
-			{ control: entry.fields.equipamento_referencia, label: __("Referência do Equipamento") },
-			{ control: entry.severidade_control, label: __("Severidade") },
-			{ control: entry.fields.descricao_do_defeito, label: __("Descrição do Defeito") },
-		];
-	}
-
-	validate_entry(entry) {
-		const missing = [];
-		this.get_required_controls(entry).forEach(({ control, label }) => {
-			const has_value = !!(control.get_value() || "").toString().trim();
-			control.$wrapper_field && control.$wrapper_field.toggleClass("rra-invalid", !has_value);
-			if (!has_value) missing.push(label);
-		});
-
-		if (missing.length) {
-			entry.$error.text(__("Preencha antes de guardar: {0}", [missing.join(", ")])).addClass("rra-show");
-			return false;
-		}
-		entry.$error.removeClass("rra-show");
-		return true;
-	}
-
-	build_field_values(entry) {
-		const values = {
-			area_planta: entry.area_control.get_value(),
-			severidade: entry.severidade_control.get_value(),
-		};
-		RRA_FIELD_DEFS.forEach((def) => {
-			values[def.fieldname] = entry.fields[def.fieldname].get_value();
-		});
-		if (this.campanha_info && this.campanha_info.tecnica === "Termografia") {
-			RRA_THERMO_FIELD_DEFS.forEach((def) => {
-				values[def.fieldname] = entry.fields[def.fieldname].get_value();
-			});
-		}
-		return values;
-	}
-
-	// ---- new draft: add / discard / save -----------------------------------
-
-	add_draft() {
-		const entry = { id: ++rra_entry_seq, mode: "new" };
-		entry.$card = this.build_editable_card(entry);
-		this.drafts.unshift(entry);
-		this.refresh_list();
-		entry.fields.equipamento_referencia.$input && entry.fields.equipamento_referencia.$input.focus();
-	}
-
-	discard_draft(entry) {
-		const idx = this.drafts.indexOf(entry);
-		if (idx > -1) this.drafts.splice(idx, 1);
-		entry.$card.remove();
-		if (!this.drafts.length && !this.saved_entries.length) this.refresh_list();
-	}
-
-	save_draft(entry) {
-		if (!this.validate_entry(entry)) return;
-
-		this.last_area_value = entry.area_control.get_value();
-		const $save_btn = entry.$save_btn;
-		$save_btn.prop("disabled", true).text(__("A guardar..."));
-
-		frappe
-			.call({
-				method: "frappe.client.insert",
-				args: {
-					doc: Object.assign({ doctype: "Achado De Inspecao", campanha: this.campanha_control.get_value() }, this.build_field_values(entry)),
-				},
-			})
-			.then((r) => {
-				frappe.show_alert({ message: __("Achado {0} guardado", [r.message.name]), indicator: "green" });
-				const idx = this.drafts.indexOf(entry);
-				if (idx > -1) this.drafts.splice(idx, 1);
-
-				const saved_entry = { mode: "view", data: r.message };
-				saved_entry.$card = this.build_view_card(saved_entry);
-				this.saved_entries.unshift(saved_entry);
-
-				entry.$card.replaceWith(saved_entry.$card);
-			})
-			.always(() => {
-				$save_btn.prop("disabled", false).text(__("Guardar"));
-			});
-	}
-
-	// ---- view (saved, collapsed) card ---------------------------------------
+	// ---- saved (summary) card ------------------------------------------------
 
 	build_view_card(entry) {
 		const row = entry.data;
 		const badge_class = RRA_BADGE_CLASS[row.severidade] || "rra-badge-nao-recolhido";
-		const $card = $('<div class="rra-card rra-card-saved">');
+		const $card = $('<div class="rra-card">');
 		const $row = $('<div class="rra-saved-row">').appendTo($card);
 
 		if (row.imagem) {
@@ -438,71 +192,157 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.resolve_area_label(row.area_planta, $area);
 		$("<span>&middot;</span>").appendTo($meta);
 		$("<span>").html(comment_when(row.creation)).appendTo($meta);
-		const $abrir = $(
-			`<a href="/app/achado-de-inspecao/${encodeURIComponent(row.name)}" target="_blank">${__("Abrir")}</a>`
-		).appendTo($meta);
-		$abrir.on("click", (e) => e.stopPropagation());
 
-		$('<span class="rra-saved-chevron">').appendTo($row);
-
-		$row.on("click", () => this.expand_entry(entry));
+		$row.on("click", () => this.open_achado_dialog({ mode: "edit", name: row.name }));
 
 		return $card;
 	}
 
-	// ---- expand a saved entry into edit mode --------------------------------
+	// ---- create / edit dialog ------------------------------------------------
 
-	expand_entry(entry) {
-		const $old_card = entry.$card;
-		$old_card.css("opacity", 0.6);
+	get_dialog_fields() {
+		const is_termografia = !!(this.campanha_info && this.campanha_info.tecnica === "Termografia");
+
+		const fields = [
+			{
+				fieldtype: "Link",
+				fieldname: "area_planta",
+				label: __("Área / Planta"),
+				options: "Area De Inspecao",
+				reqd: 1,
+				get_query: () => ({
+					filters: { cliente: this.campanha_info ? this.campanha_info.cliente : "" },
+				}),
+			},
+			{
+				fieldtype: "Select",
+				fieldname: "severidade",
+				label: __("Severidade"),
+				options: RRA_SEVERIDADE_OPTIONS,
+				reqd: 1,
+			},
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Data", fieldname: "equipamento_referencia", label: __("Referência do Equipamento"), reqd: 1 },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Int", fieldname: "item", label: __("Item (Nº)") },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Small Text", fieldname: "equipamento_descricao", label: __("Descrição do Equipamento") },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Data", fieldname: "componente", label: __("Componente / Localização do Defeito") },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Data", fieldname: "ordem_de_servico", label: __("Ordem de Serviço") },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Small Text", fieldname: "descricao_do_defeito", label: __("Descrição do Defeito"), reqd: 1 },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Small Text", fieldname: "acao_recomendada", label: __("Ação Recomendada") },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Data", fieldname: "plano_de_monitorizacao", label: __("Plano de Monitorização") },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Attach Image", fieldname: "imagem", label: __("Imagem") },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Data", fieldname: "numero_da_imagem", label: __("Número da Imagem (Origem)") },
+		];
+
+		if (is_termografia) {
+			fields.push(
+				{ fieldtype: "Section Break", label: __("Leituras de Temperatura") },
+				{ fieldtype: "Float", fieldname: "temp_max_operacao", label: __("Temp. Máx. Operação (°C)") },
+				{ fieldtype: "Column Break" },
+				{ fieldtype: "Float", fieldname: "temp_actual", label: __("Temp. Actual (°C)") },
+				{ fieldtype: "Column Break" },
+				{ fieldtype: "Float", fieldname: "temp_ambiente", label: __("Temp. Ambiente (°C)") }
+			);
+		}
+
+		return fields;
+	}
+
+	open_achado_dialog({ mode, name }) {
+		const is_new = mode === "new";
+
+		const show_dialog = (data) => {
+			const dialog = new frappe.ui.Dialog({
+				title: is_new ? __("Novo Achado") : __("Editar Achado {0}", [name]),
+				size: "large",
+				fields: this.get_dialog_fields(),
+				primary_action_label: is_new ? __("Guardar") : __("Guardar Alterações"),
+				primary_action: (values) => {
+					if (is_new) {
+						this.create_achado(dialog, values);
+					} else {
+						this.update_achado(dialog, name, values);
+					}
+				},
+			});
+
+			if (data) {
+				dialog.set_values(data);
+			} else if (this.last_area_value) {
+				dialog.set_value("area_planta", this.last_area_value);
+			}
+
+			dialog.show();
+		};
+
+		if (is_new) {
+			show_dialog(null);
+		} else {
+			frappe.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } }).then((r) => {
+				show_dialog(r.message);
+			});
+		}
+	}
+
+	create_achado(dialog, values) {
+		dialog.get_primary_btn().prop("disabled", true);
+
 		frappe
 			.call({
-				method: "frappe.client.get",
-				args: { doctype: "Achado De Inspecao", name: entry.data.name },
+				method: "frappe.client.insert",
+				args: {
+					doc: Object.assign(
+						{ doctype: "Achado De Inspecao", campanha: this.campanha_control.get_value() },
+						values
+					),
+				},
 			})
 			.then((r) => {
-				entry.mode = "edit";
-				entry.data = r.message;
-				entry.$card = this.build_editable_card(entry);
-				$old_card.replaceWith(entry.$card);
+				frappe.show_alert({ message: __("Achado {0} guardado", [r.message.name]), indicator: "green" });
+				this.last_area_value = values.area_planta;
+				dialog.hide();
+
+				const entry = { data: r.message };
+				entry.$card = this.build_view_card(entry);
+				this.saved_entries.unshift(entry);
+				this.refresh_list();
 			})
 			.always(() => {
-				$old_card.css("opacity", "");
+				dialog.get_primary_btn().prop("disabled", false);
 			});
 	}
 
-	cancel_edit(entry) {
-		entry.mode = "view";
-		const $old_card = entry.$card;
-		entry.$card = this.build_view_card(entry);
-		$old_card.replaceWith(entry.$card);
-	}
-
-	save_edit(entry) {
-		if (!this.validate_entry(entry)) return;
-
-		const $save_btn = entry.$save_btn;
-		$save_btn.prop("disabled", true).text(__("A guardar..."));
+	update_achado(dialog, name, values) {
+		dialog.get_primary_btn().prop("disabled", true);
 
 		frappe
 			.call({
 				method: "frappe.client.set_value",
-				args: {
-					doctype: "Achado De Inspecao",
-					name: entry.data.name,
-					fieldname: this.build_field_values(entry),
-				},
+				args: { doctype: "Achado De Inspecao", name, fieldname: values },
 			})
 			.then((r) => {
-				frappe.show_alert({ message: __("Achado {0} actualizado", [entry.data.name]), indicator: "green" });
-				entry.mode = "view";
-				entry.data = r.message;
-				const $old_card = entry.$card;
-				entry.$card = this.build_view_card(entry);
-				$old_card.replaceWith(entry.$card);
+				frappe.show_alert({ message: __("Achado {0} actualizado", [name]), indicator: "green" });
+				dialog.hide();
+
+				const entry = this.saved_entries.find((e) => e.data.name === name);
+				if (entry) {
+					entry.data = r.message;
+					const $old_card = entry.$card;
+					entry.$card = this.build_view_card(entry);
+					$old_card.replaceWith(entry.$card);
+				}
 			})
 			.always(() => {
-				$save_btn.prop("disabled", false).text(__("Guardar Alterações"));
+				dialog.get_primary_btn().prop("disabled", false);
 			});
 	}
 };
