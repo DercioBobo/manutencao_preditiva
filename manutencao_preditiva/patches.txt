@@ -1,0 +1,1 @@
+manutencao_preditiva.patches.normalizar_area_planta

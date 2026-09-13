@@ -14,10 +14,16 @@ bench --site <site> install-app manutencao_preditiva
 
 - **Campanha De Inspecao** — cabeçalho de uma ronda de inspeção a um cliente
   (Cliente, Técnica: Vibração/Termografia/…, data, referência do documento).
-- **Achado De Inspecao** — cada defeito/achado encontrado, ligado à campanha.
-  Inclui a secção "Resposta do Cliente" (ação tomada, responsável, prazo,
-  estado, data de conclusão), editável apenas por quem tem permissão de
-  nível 1 nesses campos.
+- **Area De Inspecao** — mestre de áreas/plantas (ex.: "Sala Eléctrica",
+  "WCP A"), sempre associado a um Cliente. Nome interno em série (`AP-00001`)
+  para não colidir com acentos/formatação do texto - o campo "Área / Planta"
+  em si fica livre para editar/pesquisar normalmente. O dropdown em Achado
+  De Inspecao filtra automaticamente pelas áreas do mesmo cliente, para o
+  técnico não escrever a mesma área de formas diferentes por engano.
+- **Achado De Inspecao** — cada defeito/achado encontrado, ligado à campanha
+  e à área. Inclui a secção "Resposta do Cliente" (ação tomada, responsável,
+  prazo, estado, data de conclusão), editável apenas por quem tem permissão
+  de nível 1 nesses campos.
 
 Substitui o fluxo anterior de "1 Excel por cliente" enviado por email: cada
 cliente tem um login de Desk restrito, via **User Permission** em Customer,

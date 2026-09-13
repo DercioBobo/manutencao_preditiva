@@ -18,11 +18,11 @@
  ],
  "fields": [
   {
-   "default": "CI-.YYYY.-.#####",
+   "default": "CI-.YYYY.-.##",
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Série",
-   "options": "CI-.YYYY.-.#####"
+   "options": "CI-.YYYY.-.##"
   },
   {
    "fieldname": "cliente",

@@ -43,11 +43,11 @@
  ],
  "fields": [
   {
-   "default": "AI-.YYYY.-.#####",
+   "default": "AI-.YYYY.-.##",
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Série",
-   "options": "AI-.YYYY.-.#####"
+   "options": "AI-.YYYY.-.##"
   },
   {
    "fieldname": "campanha",
@@ -83,9 +83,10 @@
   },
   {
    "fieldname": "area_planta",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Área / Planta",
+   "options": "Area De Inspecao",
    "reqd": 1
   },
   {

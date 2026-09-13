@@ -203,7 +203,7 @@ def extract_thermography(file_path, cliente_nome):
 			achados.append(
 				{
 					"campanha_key": campanha_key,
-					"area_planta": f"{sheet_name} - {_cellval(row, 3)}" if _cellval(row, 3) else sheet_name,
+					"area_planta": _thermo_area_label(sheet_name, _cellval(row, 3)),
 					"item": item,
 					"equipamento_referencia": equipamento,
 					"equipamento_descricao": _cellval(row, 5),
@@ -245,6 +245,7 @@ def load_from_json(json_path=None):
 
 	created = {"campanhas": 0, "achados": 0}
 	campanha_name_by_key = {}
+	campanha_cliente_by_key = {}
 
 	for campanha in payload["campanhas"]:
 		_ensure_customer(campanha["cliente"])
@@ -256,9 +257,21 @@ def load_from_json(json_path=None):
 			created=created,
 		)
 		campanha_name_by_key[campanha["key"]] = name
+		campanha_cliente_by_key[campanha["key"]] = campanha["cliente"]
+
+	area_cache = {}
 
 	for achado in payload["achados"]:
-		fields = {**achado, "campanha": campanha_name_by_key[achado["campanha_key"]]}
+		cliente = campanha_cliente_by_key[achado["campanha_key"]]
+		area_key = (cliente, achado["area_planta"])
+		if area_key not in area_cache:
+			area_cache[area_key] = _ensure_area(cliente, achado["area_planta"])
+
+		fields = {
+			**achado,
+			"campanha": campanha_name_by_key[achado["campanha_key"]],
+			"area_planta": area_cache[area_key],
+		}
 		fields.pop("campanha_key")
 		if _create_achado_if_new(fields):
 			created["achados"] += 1
@@ -339,6 +352,18 @@ def _ensure_campanha(cliente, tecnica, data_da_inspecao, referencia_do_documento
 	return doc.name
 
 
+def _ensure_area(cliente, area):
+	import frappe
+
+	existing = frappe.db.get_value("Area De Inspecao", {"cliente": cliente, "area": area})
+	if existing:
+		return existing
+
+	doc = frappe.get_doc({"doctype": "Area De Inspecao", "cliente": cliente, "area": area})
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
 def _create_achado_if_new(fields):
 	import frappe
 
@@ -368,6 +393,18 @@ def _find_header_row(ws, expected_label, max_scan_rows=30, search_columns=(1, 2,
 			if _cstr(ws.cell(row=r, column=c).value).strip() == expected_label:
 				return r
 	return None
+
+
+def _thermo_area_label(sheet_name, area_description):
+	"""Combine sheet name + "Area Description" into one label, without
+	duplicating the sheet name when the source already embedded it there
+	(seen in practice: some rows' Area Description already spell out the
+	full room name, e.g. "SALA ELECTRICA 2 VIRADOR DE VAGOES")."""
+	if not area_description:
+		return sheet_name
+	if sheet_name.strip().upper() in area_description.strip().upper():
+		return area_description
+	return f"{sheet_name} - {area_description}"
 
 
 _REVISION_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})")
