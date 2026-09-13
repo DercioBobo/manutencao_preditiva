@@ -101,15 +101,18 @@
   },
   {
    "fieldname": "equipamento_referencia",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Referência do Equipamento",
+   "options": "Equipamento De Inspecao",
    "reqd": 1
   },
   {
+   "fetch_from": "equipamento_referencia.descricao",
    "fieldname": "equipamento_descricao",
    "fieldtype": "Small Text",
-   "label": "Descrição do Equipamento"
+   "label": "Descrição do Equipamento",
+   "read_only": 1
   },
   {
    "fieldname": "cb_equipamento",

@@ -2,3 +2,4 @@
 
 [post_model_sync]
 manutencao_preditiva.patches.normalizar_area_planta
+manutencao_preditiva.patches.normalizar_equipamento_referencia

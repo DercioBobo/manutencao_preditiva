@@ -260,19 +260,29 @@ def load_from_json(json_path=None):
 		campanha_cliente_by_key[campanha["key"]] = campanha["cliente"]
 
 	area_cache = {}
+	equipamento_cache = {}
 
 	for achado in payload["achados"]:
 		cliente = campanha_cliente_by_key[achado["campanha_key"]]
+
 		area_key = (cliente, achado["area_planta"])
 		if area_key not in area_cache:
 			area_cache[area_key] = _ensure_area(cliente, achado["area_planta"])
+
+		equipamento_key = (cliente, achado["equipamento_referencia"])
+		if equipamento_key not in equipamento_cache:
+			equipamento_cache[equipamento_key] = _ensure_equipamento(
+				cliente, achado["equipamento_referencia"], achado.get("equipamento_descricao")
+			)
 
 		fields = {
 			**achado,
 			"campanha": campanha_name_by_key[achado["campanha_key"]],
 			"area_planta": area_cache[area_key],
+			"equipamento_referencia": equipamento_cache[equipamento_key],
 		}
 		fields.pop("campanha_key")
+		fields.pop("equipamento_descricao", None)  # read-only, fetched from Equipamento De Inspecao
 		if _create_achado_if_new(fields):
 			created["achados"] += 1
 
@@ -360,6 +370,25 @@ def _ensure_area(cliente, area):
 		return existing
 
 	doc = frappe.get_doc({"doctype": "Area De Inspecao", "cliente": cliente, "area": area})
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
+def _ensure_equipamento(cliente, equipamento, descricao=None):
+	import frappe
+
+	existing = frappe.db.get_value("Equipamento De Inspecao", {"cliente": cliente, "equipamento": equipamento})
+	if existing:
+		return existing
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Equipamento De Inspecao",
+			"cliente": cliente,
+			"equipamento": equipamento,
+			"descricao": descricao,
+		}
+	)
 	doc.insert(ignore_permissions=True)
 	return doc.name
 

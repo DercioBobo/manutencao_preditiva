@@ -9,5 +9,8 @@ frappe.ui.form.on("Achado De Inspecao", {
 		frm.set_query("area_planta", () => ({
 			filters: { cliente: frm.doc.cliente },
 		}));
+		frm.set_query("equipamento_referencia", () => ({
+			filters: { cliente: frm.doc.cliente },
+		}));
 	},
 });
