@@ -31,6 +31,7 @@ run this locally (needs openpyxl, not frappe):
 
 import json
 import os
+import re
 
 VIBRATION_SEVERITY = {
 	1: "Crítico",
@@ -172,6 +173,9 @@ def extract_thermography(file_path, cliente_nome):
 		header_row = _find_header_row(ws, expected_label="Item")
 		if not header_row:
 			continue
+
+		if campanha["data_da_inspecao"] is None:
+			campanha["data_da_inspecao"] = _find_revision_date(ws)
 
 		for row in ws.iter_rows(min_row=header_row + 1, max_row=ws.max_row):
 			item = _cellval(row, 2)
@@ -363,6 +367,25 @@ def _find_header_row(ws, expected_label, max_scan_rows=30, search_columns=(1, 2,
 		for c in search_columns:
 			if _cstr(ws.cell(row=r, column=c).value).strip() == expected_label:
 				return r
+	return None
+
+
+_REVISION_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})")
+
+
+def _find_revision_date(ws, max_scan_rows=15):
+	"""Look for a "Revisão NN DD.MM.YY" style tag in the sheet header area
+	and return it as an ISO date string, or None if nothing matches."""
+	for r in range(1, min(max_scan_rows, ws.max_row) + 1):
+		for c in range(1, min(ws.max_column, 20) + 1):
+			value = ws.cell(row=r, column=c).value
+			if isinstance(value, str) and "Revis" in value:
+				m = _REVISION_DATE_RE.search(value)
+				if m:
+					day, month, year = (int(x) for x in m.groups())
+					if year < 100:
+						year += 2000
+					return f"{year:04d}-{month:02d}-{day:02d}"
 	return None
 
 
