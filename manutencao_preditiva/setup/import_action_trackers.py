@@ -288,12 +288,23 @@ def _ensure_customer(nome):
 	if frappe.db.exists("Customer", nome):
 		return nome
 
+	# Selling Settings' defaults (or the hardcoded "All ..." root names) can
+	# point at a *group* node, which ERPNext's Customer.validate() rejects -
+	# a Customer must sit on a non-group leaf. Fall back to any leaf record.
+	customer_group = frappe.db.get_single_value("Selling Settings", "customer_group")
+	if not customer_group or frappe.db.get_value("Customer Group", customer_group, "is_group"):
+		customer_group = frappe.db.get_value("Customer Group", {"is_group": 0})
+
+	territory = frappe.db.get_single_value("Selling Settings", "territory")
+	if not territory or frappe.db.get_value("Territory", territory, "is_group"):
+		territory = frappe.db.get_value("Territory", {"is_group": 0})
+
 	doc = frappe.get_doc(
 		{
 			"doctype": "Customer",
 			"customer_name": nome,
-			"customer_group": frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups",
-			"territory": frappe.db.get_single_value("Selling Settings", "territory") or "All Territories",
+			"customer_group": customer_group,
+			"territory": territory,
 		}
 	)
 	doc.insert(ignore_permissions=True, ignore_mandatory=True)
