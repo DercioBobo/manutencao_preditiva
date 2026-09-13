@@ -42,6 +42,7 @@
  "name": "Area De Inspecao",
  "owner": "Administrator",
  "search_fields": "area,cliente",
+ "show_title_field_in_link": 1,
  "title_field": "area",
  "permissions": [
   {
