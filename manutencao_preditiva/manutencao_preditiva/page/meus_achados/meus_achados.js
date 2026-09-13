@@ -201,7 +201,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
-					fields: ["area_planta", "area_planta.area as area_nome", "count(name) as total"],
+					fields: [
+						"area_planta",
+						"area_planta.area as area_nome",
+						"count(`tabAchado De Inspecao`.name) as total",
+					],
 					group_by: "area_planta",
 					order_by: "total desc",
 					limit_page_length: 5,
@@ -214,7 +218,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					fields: [
 						"equipamento_referencia",
 						"equipamento_referencia.equipamento as equipamento_nome",
-						"count(name) as total",
+						"count(`tabAchado De Inspecao`.name) as total",
 					],
 					group_by: "equipamento_referencia",
 					order_by: "total desc",
