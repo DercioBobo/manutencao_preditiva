@@ -56,6 +56,32 @@ para o cliente preencher depois).
 - Lista "Achados Recentes desta Campanha" por baixo do formulário, para o
   técnico confirmar o que já foi registado sem sair da página.
 
+### Meus Achados (portal do cliente)
+
+Página dedicada para o cliente (`/app/meus-achados`, papel **Cliente Portal**),
+com dois separadores:
+
+- **Painel** — cartões com totais (achados, por resolver, críticos, em
+  atraso), gráficos de composição por severidade/estado, rankings das áreas
+  e equipamentos com mais achados, e um gráfico de achados por campanha ao
+  longo do tempo. Reflecte sempre o histórico completo do cliente, não só a
+  página actualmente carregada na lista.
+- **Achados** — pesquisa, filtro por severidade/estado e a lista de achados
+  em si. Clicar num achado abre um diálogo com o detalhe (só leitura) e a
+  secção de resposta (ação tomada, responsável, prazo, estado, data de
+  conclusão) — os únicos campos que este papel pode gravar, reforçado tanto
+  na interface como nas permissões (nível 1) do doctype.
+
+### Workspaces
+
+Duas Workspaces (visíveis conforme o papel do utilizador, via `roles`):
+
+- **Manutenção Preditiva** — Registo Rápido de Achados, listas de Campanha/
+  Achado/Área/Equipamento, e um atalho para a vista do cliente. Visível a
+  **System Manager** e **Tecnico de Inspecao**.
+- **Meus Achados** — atalho directo à página do cliente. Visível a
+  **System Manager** e **Cliente Portal**.
+
 ### Importar os trackers históricos (Excel)
 
 Os dois ficheiros "Action Tracker" originais (vibração e termografia) já
