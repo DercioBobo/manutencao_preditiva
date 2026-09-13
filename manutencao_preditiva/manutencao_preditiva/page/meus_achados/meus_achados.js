@@ -8,7 +8,9 @@ frappe.pages["meus-achados"].on_page_load = function (wrapper) {
 };
 
 frappe.pages["meus-achados"].on_page_show = function (wrapper) {
-	wrapper.ma && wrapper.ma.load_entries();
+	if (!wrapper.ma) return;
+	wrapper.ma.load_entries();
+	wrapper.ma.load_dashboard();
 };
 
 const MA_PAGE_SIZE = 50;
@@ -29,6 +31,26 @@ const MA_ESTADO_BADGE = {
 	"Em Curso": "ma-badge-em-curso",
 	Concluído: "ma-badge-concluido",
 	"Não Aplicável": "ma-badge-na",
+};
+
+// Same hex values as the CSS custom properties above - frappe.Chart needs
+// literal colors, it can't read CSS variables. Kept identical to the badge
+// colors on purpose: severity/estado already have an established meaning
+// in this app (the card badges), so the charts reuse it rather than a
+// fresh categorical palette.
+const MA_SEVERIDADE_HEX = {
+	Crítico: "#c4453a",
+	Alarme: "#d99226",
+	Aceitável: "#b8a021",
+	"Boa Condição": "#3a9d5b",
+	"Não Recolhido": "#6b7680",
+};
+
+const MA_ESTADO_HEX = {
+	Pendente: "#d99226",
+	"Em Curso": "#2b6cb0",
+	Concluído: "#3a9d5b",
+	"Não Aplicável": "#6b7680",
 };
 
 manutencao_preditiva.MeusAchados = class MeusAchados {
@@ -56,12 +78,191 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			"Achados registados nas inspeções realizadas nas suas instalações. Clique num achado para ver os detalhes e registar a sua resposta."
 		)}</div>`).appendTo(this.$container);
 
+		this.render_dashboard_shell();
 		this.$summary = $('<div class="ma-summary">').appendTo(this.$container);
 		this.render_filters();
 		this.$list = $('<div class="ma-list">').appendTo(this.$container);
 		this.$load_more_wrap = $('<div class="ma-load-more">').appendTo(this.$container).hide();
 		this.$load_more_btn = $(`<button class="ma-btn">${__("Carregar mais")}</button>`).appendTo(this.$load_more_wrap);
 		this.$load_more_btn.on("click", () => this.load_entries(true));
+	}
+
+	// ---- dashboard: stat tiles + charts -----------------------------------------
+
+	render_dashboard_shell() {
+		this.$dashboard = $('<div class="ma-dashboard">').appendTo(this.$container);
+		this.$tiles = $('<div class="ma-tiles">').appendTo(this.$dashboard);
+
+		const $charts_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
+		this.$chart_severidade = this.make_chart_card($charts_row, __("Por Severidade"));
+		this.$chart_estado = this.make_chart_card($charts_row, __("Por Estado da Ação"));
+		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Campanha (Inspeção)"));
+	}
+
+	make_chart_card(container, title) {
+		const $card = $('<div class="ma-chart-card">').appendTo(container);
+		$('<div class="ma-chart-title">').text(title).appendTo($card);
+		return $('<div class="ma-chart-body">').appendTo($card);
+	}
+
+	load_dashboard() {
+		Promise.all([
+			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Achado De Inspecao" } }),
+			frappe.call({
+				method: "frappe.client.get_count",
+				args: {
+					doctype: "Achado De Inspecao",
+					filters: { estado_da_accao: ["in", ["Pendente", "Em Curso"]] },
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_count",
+				args: { doctype: "Achado De Inspecao", filters: { severidade: "Crítico" } },
+			}),
+			frappe.call({
+				method: "frappe.client.get_count",
+				args: {
+					doctype: "Achado De Inspecao",
+					filters: {
+						prazo: ["<", frappe.datetime.get_today()],
+						estado_da_accao: ["not in", ["Concluído", "Não Aplicável"]],
+					},
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: ["severidade", "count(name) as total"],
+					group_by: "severidade",
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: ["estado_da_accao", "count(name) as total"],
+					group_by: "estado_da_accao",
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: ["campanha", "count(name) as total"],
+					group_by: "campanha",
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Campanha De Inspecao",
+					fields: ["name", "data_da_inspecao", "referencia_do_documento"],
+					order_by: "data_da_inspecao asc",
+					limit_page_length: 0,
+				},
+			}),
+		]).then((results) => {
+			const [total, pendentes, criticos, atraso, by_severidade, by_estado, by_campanha, campanhas] = results.map(
+				(r) => r.message
+			);
+			this.render_stat_tiles({
+				total: total || 0,
+				pendentes: pendentes || 0,
+				criticos: criticos || 0,
+				atraso: atraso || 0,
+			});
+			this.render_severidade_chart(by_severidade || []);
+			this.render_estado_chart(by_estado || []);
+			this.render_trend_chart(by_campanha || [], campanhas || []);
+		});
+	}
+
+	render_stat_tiles(stats) {
+		this.$tiles.empty();
+		const tiles = [
+			[__("Total de Achados"), stats.total, ""],
+			[__("Por Resolver"), stats.pendentes, "ma-tile-warning"],
+			[__("Críticos"), stats.criticos, "ma-tile-critical"],
+			[__("Em Atraso"), stats.atraso, "ma-tile-critical"],
+		];
+		tiles.forEach(([label, value, cls]) => {
+			$(`<div class="ma-tile ${cls}"><div class="ma-tile-value">${value}</div><div class="ma-tile-label">${label}</div></div>`).appendTo(
+				this.$tiles
+			);
+		});
+	}
+
+	render_empty_chart($body) {
+		$body.html(`<div class="ma-empty">${__("Sem dados")}</div>`);
+	}
+
+	render_severidade_chart(rows) {
+		this.$chart_severidade.empty();
+		const labels = [];
+		const values = [];
+		const colors = [];
+		MA_SEVERIDADE_OPTIONS.forEach((sev) => {
+			const row = rows.find((r) => r.severidade === sev);
+			if (row && row.total) {
+				labels.push(sev);
+				values.push(row.total);
+				colors.push(MA_SEVERIDADE_HEX[sev]);
+			}
+		});
+		if (!labels.length) return this.render_empty_chart(this.$chart_severidade);
+		new frappe.Chart(this.$chart_severidade[0], {
+			data: { labels, datasets: [{ values }] },
+			type: "percentage",
+			height: 140,
+			colors,
+		});
+	}
+
+	render_estado_chart(rows) {
+		this.$chart_estado.empty();
+		const labels = [];
+		const values = [];
+		const colors = [];
+		MA_ESTADO_OPTIONS.forEach((estado) => {
+			const row = rows.find((r) => r.estado_da_accao === estado);
+			if (row && row.total) {
+				labels.push(estado);
+				values.push(row.total);
+				colors.push(MA_ESTADO_HEX[estado]);
+			}
+		});
+		if (!labels.length) return this.render_empty_chart(this.$chart_estado);
+		new frappe.Chart(this.$chart_estado[0], {
+			data: { labels, datasets: [{ values }] },
+			type: "percentage",
+			height: 140,
+			colors,
+		});
+	}
+
+	render_trend_chart(campanha_counts, campanhas) {
+		this.$chart_trend.empty();
+		const counts_by_name = {};
+		campanha_counts.forEach((r) => {
+			counts_by_name[r.campanha] = r.total;
+		});
+
+		const labels = [];
+		const values = [];
+		campanhas.forEach((c) => {
+			if (!counts_by_name[c.name]) return;
+			labels.push(c.data_da_inspecao ? frappe.datetime.str_to_user(c.data_da_inspecao) : c.name);
+			values.push(counts_by_name[c.name]);
+		});
+
+		if (!labels.length) return this.render_empty_chart(this.$chart_trend);
+		new frappe.Chart(this.$chart_trend[0], {
+			data: { labels, datasets: [{ name: __("Achados"), values }] },
+			type: "bar",
+			height: 200,
+			colors: ["#14877e"],
+		});
 	}
 
 	// ---- filters --------------------------------------------------------------
@@ -361,6 +562,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					$old_card.replaceWith(entry.$card);
 					this.render_summary_bar();
 				}
+				this.load_dashboard();
 			})
 			.always(() => {
 				dialog.get_primary_btn().prop("disabled", false);
