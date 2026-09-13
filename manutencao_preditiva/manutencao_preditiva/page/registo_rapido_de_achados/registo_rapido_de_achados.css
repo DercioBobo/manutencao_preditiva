@@ -126,6 +126,49 @@
 	height: 14px;
 }
 
+.rra-icon-plus,
+.rra-icon-close {
+	position: relative;
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+}
+
+.rra-icon-plus::before,
+.rra-icon-plus::after,
+.rra-icon-close::before,
+.rra-icon-close::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	background: currentColor;
+}
+
+.rra-icon-plus::before {
+	width: 12px;
+	height: 2px;
+	transform: translate(-50%, -50%);
+}
+
+.rra-icon-plus::after {
+	width: 2px;
+	height: 12px;
+	transform: translate(-50%, -50%);
+}
+
+.rra-icon-close::before {
+	width: 12px;
+	height: 2px;
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.rra-icon-close::after {
+	width: 12px;
+	height: 2px;
+	transform: translate(-50%, -50%) rotate(-45deg);
+}
+
 /* ---- list of entry cards ---------------------------------------------- */
 
 .rra-list {
@@ -147,8 +190,20 @@
 	border-left-color: var(--rra-accent);
 }
 
-.rra-card-draft:hover {
+.rra-card-editing {
+	border-left-color: var(--rra-amber);
+}
+
+.rra-card-draft:hover,
+.rra-card-editing:hover {
 	box-shadow: 0 2px 4px rgba(20, 30, 38, 0.06), 0 8px 20px rgba(20, 30, 38, 0.06);
+}
+
+.rra-diff-preview {
+	font-size: 11px;
+	color: var(--rra-muted);
+	margin: -6px 0 10px;
+	min-height: 14px;
 }
 
 .rra-card-header {
@@ -255,6 +310,32 @@
 	gap: 14px;
 	padding: 12px 18px;
 	flex-wrap: wrap;
+	cursor: pointer;
+	border-radius: var(--rra-radius);
+}
+
+.rra-saved-row:hover {
+	background: var(--rra-surface-2);
+}
+
+.rra-saved-thumb {
+	width: 40px;
+	height: 40px;
+	border-radius: 7px;
+	object-fit: cover;
+	flex: 0 0 auto;
+	border: 1px solid var(--rra-line);
+	background: var(--rra-surface-2);
+}
+
+.rra-saved-chevron {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid var(--rra-muted);
+	border-bottom: 2px solid var(--rra-muted);
+	transform: rotate(45deg);
+	margin: 0 6px 0 2px;
 }
 
 .rra-saved-main {
