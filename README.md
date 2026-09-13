@@ -31,6 +31,31 @@ cliente tem um login de Desk restrito, via **User Permission** em Customer,
 de outros clientes. Papéis: **Tecnico de Inspecao** (equipa interna, acesso
 total) e **Cliente Portal** (leitura + resposta apenas).
 
+### Registo Rápido de Achados (página)
+
+Página dedicada para o técnico registar achados no campo rapidamente, em
+`/app/registo-rapido-de-achados` (acessível também pela awesomebar, ex.
+`Ctrl+G` → "Registo Rápido de Achados"). Só mostra os campos relevantes
+para criar um achado novo (sem a secção "Resposta do Cliente", que é só
+para o cliente preencher depois).
+
+- Campanha e Área mantêm-se seleccionadas entre registos — só os campos do
+  achado em si (equipamento, severidade, descrição, …) são limpos depois de
+  guardar, para o técnico encadear vários registos rapidamente.
+- A lista de Campanhas mostra só as que estão "Em Curso"; a Área filtra
+  automaticamente pelo Cliente da campanha seleccionada.
+- Campos de temperatura só aparecem quando a campanha é de Termografia.
+- Área/Campanha novas: basta escrever um nome que não exista no campo -
+  o Link do Frappe pergunta se quer criar (comportamento nativo, sem botão
+  extra), então não é preciso sair da página.
+- Valida campos obrigatórios no browser antes de guardar (com mensagem
+  clara do que falta) e, de qualquer forma, a validação real acontece no
+  servidor via `frappe.client.insert` - o mesmo caminho usado por
+  qualquer outra forma de criar o documento, incluindo as regras do
+  controller (ex.: cálculo da diferença de temperatura).
+- Lista "Achados Recentes desta Campanha" por baixo do formulário, para o
+  técnico confirmar o que já foi registado sem sair da página.
+
 ### Importar os trackers históricos (Excel)
 
 Os dois ficheiros "Action Tracker" originais (vibração e termografia) já
