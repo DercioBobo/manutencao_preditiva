@@ -78,24 +78,59 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			"Achados registados nas inspeções realizadas nas suas instalações. Clique num achado para ver os detalhes e registar a sua resposta."
 		)}</div>`).appendTo(this.$container);
 
-		this.render_dashboard_shell();
-		this.$summary = $('<div class="ma-summary">').appendTo(this.$container);
-		this.render_filters();
-		this.$list = $('<div class="ma-list">').appendTo(this.$container);
-		this.$load_more_wrap = $('<div class="ma-load-more">').appendTo(this.$container).hide();
+		this.render_tabs();
+
+		this.$tab_painel_content = $('<div class="ma-tab-content">').appendTo(this.$container);
+		this.$tab_achados_content = $('<div class="ma-tab-content">').appendTo(this.$container).hide();
+
+		this.render_dashboard_shell(this.$tab_painel_content);
+
+		this.$summary = $('<div class="ma-summary">').appendTo(this.$tab_achados_content);
+		this.render_filters(this.$tab_achados_content);
+		this.$list = $('<div class="ma-list">').appendTo(this.$tab_achados_content);
+		this.$load_more_wrap = $('<div class="ma-load-more">').appendTo(this.$tab_achados_content).hide();
 		this.$load_more_btn = $(`<button class="ma-btn">${__("Carregar mais")}</button>`).appendTo(this.$load_more_wrap);
 		this.$load_more_btn.on("click", () => this.load_entries(true));
 	}
 
+	// ---- tabs -------------------------------------------------------------------
+
+	render_tabs() {
+		const $tabs = $('<div class="ma-tabs">').appendTo(this.$container);
+		this.$tab_painel = $(`<button class="ma-tab active">${__("Painel")}</button>`).appendTo($tabs);
+		this.$tab_achados = $(`<button class="ma-tab">${__("Achados")}</button>`).appendTo($tabs);
+		this.$tab_painel.on("click", () => this.switch_tab("painel"));
+		this.$tab_achados.on("click", () => this.switch_tab("achados"));
+	}
+
+	switch_tab(tab) {
+		const is_painel = tab === "painel";
+		this.$tab_painel.toggleClass("active", is_painel);
+		this.$tab_achados.toggleClass("active", !is_painel);
+		this.$tab_painel_content.toggle(is_painel);
+		this.$tab_achados_content.toggle(!is_painel);
+		// frappe.Chart (used for the trend chart) can size itself to 0 if built
+		// while its container is display:none - rebuild on every return to this
+		// tab so it's always constructed while visible. The composition bars /
+		// rankings are plain CSS and don't have this problem, so this is cheap
+		// insurance, not a full page reload.
+		if (is_painel) this.load_dashboard();
+	}
+
 	// ---- dashboard: stat tiles + charts -----------------------------------------
 
-	render_dashboard_shell() {
-		this.$dashboard = $('<div class="ma-dashboard">').appendTo(this.$container);
+	render_dashboard_shell($parent) {
+		this.$dashboard = $('<div class="ma-dashboard">').appendTo($parent);
 		this.$tiles = $('<div class="ma-tiles">').appendTo(this.$dashboard);
 
 		const $charts_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
 		this.$chart_severidade = this.make_chart_card($charts_row, __("Por Severidade"));
 		this.$chart_estado = this.make_chart_card($charts_row, __("Por Estado da Ação"));
+
+		const $rankings_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
+		this.$rank_areas = this.make_chart_card($rankings_row, __("Áreas com Mais Achados"));
+		this.$rank_equipamentos = this.make_chart_card($rankings_row, __("Equipamentos com Mais Achados"));
+
 		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Campanha (Inspeção)"));
 	}
 
@@ -162,10 +197,43 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					limit_page_length: 0,
 				},
 			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: ["area_planta", "area_planta.area as area_nome", "count(name) as total"],
+					group_by: "area_planta",
+					order_by: "total desc",
+					limit_page_length: 5,
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: [
+						"equipamento_referencia",
+						"equipamento_referencia.equipamento as equipamento_nome",
+						"count(name) as total",
+					],
+					group_by: "equipamento_referencia",
+					order_by: "total desc",
+					limit_page_length: 5,
+				},
+			}),
 		]).then((results) => {
-			const [total, pendentes, criticos, atraso, by_severidade, by_estado, by_campanha, campanhas] = results.map(
-				(r) => r.message
-			);
+			const [
+				total,
+				pendentes,
+				criticos,
+				atraso,
+				by_severidade,
+				by_estado,
+				by_campanha,
+				campanhas,
+				top_areas,
+				top_equipamentos,
+			] = results.map((r) => r.message);
 			this.render_stat_tiles({
 				total: total || 0,
 				pendentes: pendentes || 0,
@@ -174,6 +242,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			});
 			this.render_severidade_chart(by_severidade || []);
 			this.render_estado_chart(by_estado || []);
+			this.render_ranking(this.$rank_areas, top_areas || [], "area_nome", "area_planta");
+			this.render_ranking(this.$rank_equipamentos, top_equipamentos || [], "equipamento_nome", "equipamento_referencia");
 			this.render_trend_chart(by_campanha || [], campanhas || []);
 		});
 	}
@@ -197,47 +267,64 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		$body.html(`<div class="ma-empty">${__("Sem dados")}</div>`);
 	}
 
+	// Hand-built composition bar instead of frappe.Chart's "percentage" type -
+	// gives full control over spacing/typography and shows the percentage
+	// alongside the count, matching the rest of the page's design language
+	// rather than the chart library's default look.
 	render_severidade_chart(rows) {
-		this.$chart_severidade.empty();
-		const labels = [];
-		const values = [];
-		const colors = [];
+		const items = [];
 		MA_SEVERIDADE_OPTIONS.forEach((sev) => {
 			const row = rows.find((r) => r.severidade === sev);
-			if (row && row.total) {
-				labels.push(sev);
-				values.push(row.total);
-				colors.push(MA_SEVERIDADE_HEX[sev]);
-			}
+			if (row && row.total) items.push({ label: sev, value: row.total, color: MA_SEVERIDADE_HEX[sev] });
 		});
-		if (!labels.length) return this.render_empty_chart(this.$chart_severidade);
-		new frappe.Chart(this.$chart_severidade[0], {
-			data: { labels, datasets: [{ values }] },
-			type: "percentage",
-			height: 140,
-			colors,
-		});
+		this.render_comp_bar(this.$chart_severidade, items);
 	}
 
 	render_estado_chart(rows) {
-		this.$chart_estado.empty();
-		const labels = [];
-		const values = [];
-		const colors = [];
+		const items = [];
 		MA_ESTADO_OPTIONS.forEach((estado) => {
 			const row = rows.find((r) => r.estado_da_accao === estado);
-			if (row && row.total) {
-				labels.push(estado);
-				values.push(row.total);
-				colors.push(MA_ESTADO_HEX[estado]);
-			}
+			if (row && row.total) items.push({ label: estado, value: row.total, color: MA_ESTADO_HEX[estado] });
 		});
-		if (!labels.length) return this.render_empty_chart(this.$chart_estado);
-		new frappe.Chart(this.$chart_estado[0], {
-			data: { labels, datasets: [{ values }] },
-			type: "percentage",
-			height: 140,
-			colors,
+		this.render_comp_bar(this.$chart_estado, items);
+	}
+
+	render_comp_bar($body, items) {
+		$body.empty();
+		if (!items.length) return this.render_empty_chart($body);
+
+		const total = items.reduce((sum, i) => sum + i.value, 0);
+		const $bar = $('<div class="ma-comp-bar">').appendTo($body);
+		items.forEach((item) => {
+			const pct = (item.value / total) * 100;
+			$(`<div class="ma-comp-seg" style="width:${pct}%;background:${item.color}">`)
+				.attr("title", `${item.label}: ${item.value} (${pct.toFixed(0)}%)`)
+				.appendTo($bar);
+		});
+
+		const $legend = $('<div class="ma-comp-legend">').appendTo($body);
+		items.forEach((item) => {
+			const pct = ((item.value / total) * 100).toFixed(0);
+			const $row = $('<div class="ma-comp-legend-item">').appendTo($legend);
+			$('<span class="ma-comp-dot">').css("background", item.color).appendTo($row);
+			$('<span class="ma-comp-legend-label">').text(item.label).appendTo($row);
+			$('<span class="ma-comp-legend-value">').text(`${item.value} · ${pct}%`).appendTo($row);
+		});
+	}
+
+	render_ranking($body, rows, name_field, code_field) {
+		$body.empty();
+		if (!rows.length) return this.render_empty_chart($body);
+
+		const max = Math.max(...rows.map((r) => r.total));
+		rows.forEach((row) => {
+			const label = row[name_field] || row[code_field] || "";
+			const pct = max ? (row.total / max) * 100 : 0;
+			const $row = $('<div class="ma-rank-row">').appendTo($body);
+			$('<div class="ma-rank-label">').attr("title", label).text(label).appendTo($row);
+			const $wrap = $('<div class="ma-rank-bar-wrap">').appendTo($row);
+			$('<div class="ma-rank-bar">').css("width", pct + "%").appendTo($wrap);
+			$('<div class="ma-rank-value">').text(row.total).appendTo($row);
 		});
 	}
 
@@ -262,13 +349,14 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			type: "bar",
 			height: 200,
 			colors: ["#14877e"],
+			valuesOverPoints: 1,
 		});
 	}
 
 	// ---- filters --------------------------------------------------------------
 
-	render_filters() {
-		const $bar = $('<div class="ma-filters">').appendTo(this.$container);
+	render_filters($parent) {
+		const $bar = $('<div class="ma-filters">').appendTo($parent);
 
 		this.$search = $(
 			`<input type="text" class="ma-search" placeholder="${__("Pesquisar por equipamento, área, descrição...")}">`
@@ -286,7 +374,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			this.load_entries();
 		});
 
-		this.$chips = $('<div class="ma-chips">').appendTo(this.$container);
+		this.$chips = $('<div class="ma-chips">').appendTo($parent);
 		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(

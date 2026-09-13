@@ -32,6 +32,37 @@
 	max-width: 640px;
 }
 
+/* ---- tabs ----------------------------------------------------------------- */
+
+.ma-tabs {
+	display: flex;
+	gap: 4px;
+	border-bottom: 1px solid var(--ma-line);
+	margin-bottom: 20px;
+}
+
+.ma-tab {
+	border: none;
+	background: transparent;
+	color: var(--ma-muted);
+	font-size: 13px;
+	font-weight: 600;
+	padding: 10px 4px;
+	margin-right: 20px;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	transition: all 0.12s ease;
+}
+
+.ma-tab:hover {
+	color: var(--ma-ink);
+}
+
+.ma-tab.active {
+	color: var(--ma-accent);
+	border-bottom-color: var(--ma-accent);
+}
+
 /* ---- dashboard: stat tiles + charts --------------------------------------- */
 
 .ma-dashboard {
@@ -102,12 +133,107 @@
 	min-height: 40px;
 }
 
+/* ---- composition bar (severidade / estado breakdown) ----------------------- */
+
+.ma-comp-bar {
+	display: flex;
+	height: 14px;
+	border-radius: 7px;
+	overflow: hidden;
+	background: var(--ma-surface-2);
+	margin: 10px 0 16px;
+}
+
+.ma-comp-seg {
+	height: 100%;
+	border-right: 2px solid var(--ma-surface);
+}
+
+.ma-comp-seg:last-child {
+	border-right: none;
+}
+
+.ma-comp-legend {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ma-comp-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.ma-comp-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+}
+
+.ma-comp-legend-label {
+	flex: 1 1 auto;
+	color: var(--ma-ink);
+	font-weight: 600;
+}
+
+.ma-comp-legend-value {
+	color: var(--ma-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---- ranking list (top áreas / equipamentos) -------------------------------- */
+
+.ma-rank-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 0;
+}
+
+.ma-rank-label {
+	flex: 0 0 150px;
+	font-size: 12px;
+	color: var(--ma-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ma-rank-bar-wrap {
+	flex: 1 1 auto;
+	height: 10px;
+	background: var(--ma-surface-2);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.ma-rank-bar {
+	height: 100%;
+	background: var(--ma-accent);
+	border-radius: 5px;
+}
+
+.ma-rank-value {
+	flex: 0 0 28px;
+	text-align: right;
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--ma-ink);
+	font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 720px) {
 	.ma-tiles {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	.ma-charts-row {
 		grid-template-columns: 1fr;
+	}
+	.ma-rank-label {
+		flex-basis: 100px;
 	}
 }
 
