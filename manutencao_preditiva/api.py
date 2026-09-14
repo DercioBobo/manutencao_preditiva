@@ -10,6 +10,9 @@ from frappe.utils.password import update_password
 
 ACCESS_MANAGER_ROLES = ("System Manager", "Gestor de Acessos de Cliente")
 
+PORTAL_WORKSPACE = "Portal do Cliente"
+OWN_MODULE = "Manutencao Preditiva"
+
 # Roles that mean "this is an internal staff login" - reusing one of these
 # emails for a client account would silently scope the staff member's own
 # Desk access to a single Customer (a User Permission applies to every
@@ -39,16 +42,33 @@ def _generate_temp_password(length=12):
 	return "".join(required)
 
 
+def _restrict_client_desk(user):
+	"""Land the user on Portal do Cliente instead of the generic Desk home,
+	and hide every other installed app's module (HR, Website, Tools, ...)
+	from the sidebar - a client only ever needs to see their own portal, not
+	the internal team's workspaces. Computed fresh from Module Def each call
+	so it stays correct as apps are added/removed, and mutates the in-memory
+	doc only - caller is responsible for saving.
+	"""
+	if frappe.db.exists("Workspace", PORTAL_WORKSPACE):
+		user.default_workspace = PORTAL_WORKSPACE
+
+	other_modules = frappe.get_all("Module Def", pluck="module_name")
+	user.set("block_modules", [{"module": m} for m in other_modules if m != OWN_MODULE])
+
+
 @frappe.whitelist()
 def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 	"""Provision (or extend) Cliente Portal access for one Customer in a
 	single call: creates the User if needed (role = Cliente Portal only),
-	adds the User Permission that scopes them to that Customer, sets a
-	ready-to-use temporary password on a brand new account, and returns a
-	set-password link too - so a non-technical admin doesn't have to visit
-	the User and User Permission screens separately, can't leave the portal
-	unscoped by forgetting the permission step, and can hand the client
-	working credentials immediately instead of depending on outgoing email.
+	adds the User Permission that scopes them to that Customer, points their
+	desk straight at Portal do Cliente and hides every other app's module
+	from their sidebar, sets a ready-to-use temporary password on a brand
+	new account, and returns a set-password link too - so a non-technical
+	admin doesn't have to visit the User and User Permission screens
+	separately, can't leave the portal unscoped by forgetting the permission
+	step, and can hand the client working credentials immediately instead of
+	depending on outgoing email.
 
 	The temp password is only generated for a brand new account - reusing
 	this call to add an existing Cliente Portal user to another Customer
@@ -90,6 +110,7 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 			}
 		)
 		user.flags.ignore_permissions = True
+		_restrict_client_desk(user)
 		user.insert()
 
 		temp_password = _generate_temp_password()
@@ -105,12 +126,16 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 			)
 		if "Cliente Portal" not in existing_roles:
 			user.append("roles", {"role": "Cliente Portal"})
-			user.flags.ignore_permissions = True
-			user.save()
 		if not user.enabled:
 			user.enabled = 1
-			user.flags.ignore_permissions = True
-			user.save()
+
+		# Always reapplied (not just on first creation) so re-running this
+		# tool for an already-provisioned client also declutters their desk -
+		# e.g. after this restriction was added, for accounts made before it.
+		_restrict_client_desk(user)
+
+		user.flags.ignore_permissions = True
+		user.save()
 
 	already_scoped = frappe.db.exists(
 		"User Permission",
