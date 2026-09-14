@@ -1,0 +1,66 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-09-14 00:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [
+  {
+   "fieldname": "cliente",
+   "fieldtype": "Link",
+   "label": "Cliente",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "campanha",
+   "fieldtype": "Link",
+   "label": "Campanha",
+   "options": "Campanha De Inspecao"
+  },
+  {
+   "fieldname": "area_planta",
+   "fieldtype": "Link",
+   "label": "Área",
+   "options": "Area De Inspecao"
+  },
+  {
+   "fieldname": "equipamento_referencia",
+   "fieldtype": "Link",
+   "label": "Equipamento",
+   "options": "Equipamento De Inspecao"
+  },
+  {
+   "fieldname": "severidade",
+   "fieldtype": "Select",
+   "label": "Severidade",
+   "options": "\nCrítico\nAlarme\nAceitável\nBoa Condição\nNão Recolhido"
+  },
+  {
+   "fieldname": "estado_da_accao",
+   "fieldtype": "Select",
+   "label": "Estado",
+   "options": "\nPendente\nEm Curso\nConcluído\nNão Aplicável"
+  }
+ ],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-09-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Lista de Achados",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n\tname AS \"Achado:Link/Achado De Inspecao:110\",\n\tcliente AS \"Cliente:Link/Customer:150\",\n\tcampanha AS \"Campanha:Link/Campanha De Inspecao:130\",\n\tarea_planta AS \"Área:Link/Area De Inspecao:130\",\n\tequipamento_referencia AS \"Equipamento:Link/Equipamento De Inspecao:150\",\n\tcomponente AS \"Componente:Data:150\",\n\tseveridade AS \"Severidade:Data:110\",\n\testado_da_accao AS \"Estado:Data:110\",\n\tdescricao_do_defeito AS \"Descrição do Defeito:Small Text:250\",\n\tresponsavel AS \"Responsável:Data:120\",\n\tprazo AS \"Prazo:Date:100\",\n\tdata_de_conclusao AS \"Data Conclusão:Date:110\",\n\tcreation AS \"Criado em:Datetime:150\"\nFROM `tabAchado De Inspecao`\nWHERE\n\t(%(cliente)s = '' OR cliente = %(cliente)s)\n\tAND (%(campanha)s = '' OR campanha = %(campanha)s)\n\tAND (%(area_planta)s = '' OR area_planta = %(area_planta)s)\n\tAND (%(equipamento_referencia)s = '' OR equipamento_referencia = %(equipamento_referencia)s)\n\tAND (%(severidade)s = '' OR severidade = %(severidade)s)\n\tAND (%(estado_da_accao)s = '' OR estado_da_accao = %(estado_da_accao)s)\nORDER BY creation DESC",
+ "ref_doctype": "Achado De Inspecao",
+ "report_name": "Lista de Achados",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Tecnico de Inspecao"
+  }
+ ]
+}

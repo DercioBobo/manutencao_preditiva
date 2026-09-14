@@ -1,0 +1,29 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-09-14 00:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-09-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Achados por Cliente e Severidade",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n\tcliente AS \"Cliente:Link/Customer:200\",\n\tSUM(CASE WHEN severidade = 'Crítico' THEN 1 ELSE 0 END) AS \"Crítico:Int:100\",\n\tSUM(CASE WHEN severidade = 'Alarme' THEN 1 ELSE 0 END) AS \"Alarme:Int:100\",\n\tSUM(CASE WHEN severidade = 'Aceitável' THEN 1 ELSE 0 END) AS \"Aceitável:Int:110\",\n\tSUM(CASE WHEN severidade = 'Boa Condição' THEN 1 ELSE 0 END) AS \"Boa Condição:Int:130\",\n\tSUM(CASE WHEN severidade = 'Não Recolhido' THEN 1 ELSE 0 END) AS \"Não Recolhido:Int:130\",\n\tCOUNT(*) AS \"Total:Int:100\"\nFROM `tabAchado De Inspecao`\nGROUP BY cliente\nORDER BY Total DESC",
+ "ref_doctype": "Achado De Inspecao",
+ "report_name": "Achados por Cliente e Severidade",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Tecnico de Inspecao"
+  }
+ ]
+}

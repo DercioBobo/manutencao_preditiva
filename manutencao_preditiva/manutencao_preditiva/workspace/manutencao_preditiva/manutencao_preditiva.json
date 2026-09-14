@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Manutenção Preditiva</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Gestão de campanhas de inspeção, achados e ativos de manutenção preditiva.\", \"col\": 12}}, {\"id\": \"card-ferramentas\", \"type\": \"card\", \"data\": {\"card_name\": \"Ferramentas\", \"col\": 4}}, {\"id\": \"card-dados\", \"type\": \"card\", \"data\": {\"card_name\": \"Dados\", \"col\": 4}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Portal do Cliente\", \"col\": 4}}]",
+ "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Manutenção Preditiva</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Gestão de campanhas de inspeção, achados e ativos de manutenção preditiva.\", \"col\": 12}}, {\"id\": \"card-ferramentas\", \"type\": \"card\", \"data\": {\"card_name\": \"Ferramentas\", \"col\": 4}}, {\"id\": \"card-dados\", \"type\": \"card\", \"data\": {\"card_name\": \"Dados\", \"col\": 4}}, {\"id\": \"card-relatorios\", \"type\": \"card\", \"data\": {\"card_name\": \"Relatórios\", \"col\": 4}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Portal do Cliente\", \"col\": 4}}]",
  "creation": "2026-09-13 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -97,7 +97,7 @@
    "hidden": 0,
    "idx": 8,
    "is_query_report": 0,
-   "label": "Portal do Cliente",
+   "label": "Relatórios",
    "link_count": 0,
    "onboard": 0,
    "type": "Card Break"
@@ -106,6 +106,40 @@
    "doctype": "Workspace Link",
    "hidden": 0,
    "idx": 9,
+   "is_query_report": 1,
+   "label": "Achados por Cliente e Severidade",
+   "link_count": 0,
+   "link_to": "Achados por Cliente e Severidade",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "doctype": "Workspace Link",
+   "hidden": 0,
+   "idx": 10,
+   "is_query_report": 1,
+   "label": "Lista de Achados",
+   "link_count": 0,
+   "link_to": "Lista de Achados",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "doctype": "Workspace Link",
+   "hidden": 0,
+   "idx": 11,
+   "is_query_report": 0,
+   "label": "Portal do Cliente",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "doctype": "Workspace Link",
+   "hidden": 0,
+   "idx": 12,
    "is_query_report": 0,
    "label": "Meus Achados (vista do cliente)",
    "link_count": 0,
