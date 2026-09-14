@@ -578,22 +578,34 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	open_achado_dialog(entry) {
 		const name = entry.data.name;
 
-		frappe.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } }).then((r) => {
-			const data = r.message;
+		// Fetching the full doc + resolving área/equipamento titles takes a
+		// couple hundred ms - freeze so the click gets instant feedback and a
+		// second click (no visible reaction otherwise) can't fire a duplicate
+		// fetch or open two dialogs. frappe.dom's freeze/unfreeze are
+		// reference-counted, so this nests safely with any other freeze.
+		frappe.dom.freeze(__("A abrir achado..."));
 
-			Promise.all([
-				data.area_planta
-					? frappe.db.get_value("Area De Inspecao", data.area_planta, "area")
-					: Promise.resolve({ message: {} }),
-				data.equipamento_referencia
-					? frappe.db.get_value("Equipamento De Inspecao", data.equipamento_referencia, "equipamento")
-					: Promise.resolve({ message: {} }),
-			]).then(([area_r, equip_r]) => {
-				data.area_nome = area_r.message && area_r.message.area;
-				data.equipamento_nome = equip_r.message && equip_r.message.equipamento;
-				this.show_achado_dialog(data);
+		frappe
+			.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } })
+			.then((r) => {
+				const data = r.message;
+
+				return Promise.all([
+					data.area_planta
+						? frappe.db.get_value("Area De Inspecao", data.area_planta, "area")
+						: Promise.resolve({ message: {} }),
+					data.equipamento_referencia
+						? frappe.db.get_value("Equipamento De Inspecao", data.equipamento_referencia, "equipamento")
+						: Promise.resolve({ message: {} }),
+				]).then(([area_r, equip_r]) => {
+					data.area_nome = area_r.message && area_r.message.area;
+					data.equipamento_nome = equip_r.message && equip_r.message.equipamento;
+					this.show_achado_dialog(data);
+				});
+			})
+			.always(() => {
+				frappe.dom.unfreeze();
 			});
-		});
 	}
 
 	show_achado_dialog(data) {

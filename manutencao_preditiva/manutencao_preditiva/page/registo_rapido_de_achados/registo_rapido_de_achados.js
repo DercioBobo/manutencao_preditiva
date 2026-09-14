@@ -440,9 +440,18 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		if (is_new) {
 			show_dialog(null);
 		} else {
-			frappe.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } }).then((r) => {
-				show_dialog(r.message);
-			});
+			// Fetching the full doc takes a couple hundred ms - freeze so the
+			// click gets instant feedback and a second click (no visible
+			// reaction otherwise) can't fire a duplicate fetch/dialog.
+			frappe.dom.freeze(__("A abrir achado..."));
+			frappe
+				.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } })
+				.then((r) => {
+					show_dialog(r.message);
+				})
+				.always(() => {
+					frappe.dom.unfreeze();
+				});
 		}
 	}
 
