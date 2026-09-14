@@ -15,8 +15,10 @@ required_apps = ["erpnext"]
 
 # Includes in <head>
 # ------------------
-# No custom assets yet - add app_include_css / app_include_js once the
-# first doctype or workspace UI needs them.
+# Redirects a Cliente Portal login straight to Meus Achados instead of
+# landing on the Portal do Cliente workspace (which just holds a single
+# link to it) - see manutencao_preditiva/public/js/cliente_portal_redirect.js.
+app_include_js = ["/assets/manutencao_preditiva/js/cliente_portal_redirect.js"]
 
 # Fixtures
 # --------
