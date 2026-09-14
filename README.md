@@ -79,8 +79,11 @@ Duas Workspaces (visíveis conforme o papel do utilizador, via `roles`):
 - **Manutenção Preditiva** — Registo Rápido de Achados, listas de Campanha/
   Achado/Área/Equipamento, e um atalho para a vista do cliente. Visível a
   **System Manager** e **Tecnico de Inspecao**.
-- **Meus Achados** — atalho directo à página do cliente. Visível a
-  **System Manager** e **Cliente Portal**.
+- **Portal do Cliente** — atalho directo à página "Meus Achados". Tem de se
+  chamar diferente da própria página: o router do Frappe resolve Workspaces
+  antes de Páginas para o mesmo segmento de rota (`/app/<nome>`), portanto
+  uma Workspace chamada "Meus Achados" bloquearia permanentemente o acesso
+  à página com esse nome. Visível a **System Manager** e **Cliente Portal**.
 
 ### Importar os trackers históricos (Excel)
 
