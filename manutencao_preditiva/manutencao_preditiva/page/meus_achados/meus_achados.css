@@ -316,6 +316,123 @@
 	color: #fff;
 }
 
+/* ---- view toggle: cartões / tabela ----------------------------------------- */
+
+.ma-view-toggle {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 14px;
+}
+
+.ma-view-btn {
+	border: 1px solid var(--ma-line);
+	background: var(--ma-surface);
+	color: var(--ma-muted);
+	border-radius: 8px;
+	padding: 6px 14px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.12s ease;
+}
+
+.ma-view-btn:hover {
+	background: var(--ma-surface-2);
+}
+
+.ma-view-btn.active {
+	background: var(--ma-accent);
+	border-color: var(--ma-accent);
+	color: #fff;
+}
+
+/* ---- table view ------------------------------------------------------------ */
+
+.ma-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--ma-line);
+	border-radius: var(--ma-radius);
+	background: var(--ma-surface);
+}
+
+.ma-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.ma-table th,
+.ma-table td {
+	padding: 8px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--ma-line);
+	white-space: nowrap;
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ma-table thead th {
+	color: var(--ma-muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	font-size: 11px;
+	background: var(--ma-surface-2);
+	position: sticky;
+	top: 0;
+	white-space: nowrap;
+}
+
+.ma-th-sortable {
+	cursor: pointer;
+	user-select: none;
+}
+
+.ma-th-sortable:hover {
+	color: var(--ma-ink);
+}
+
+.ma-sort-arrow {
+	display: inline-block;
+	width: 10px;
+	color: var(--ma-accent);
+}
+
+.ma-table-filter-row th {
+	background: var(--ma-surface);
+	padding: 6px 10px;
+}
+
+.ma-table-filter-input {
+	width: 100%;
+	min-width: 90px;
+	padding: 4px 7px;
+	font-size: 11px;
+	border: 1px solid var(--ma-line);
+	border-radius: 6px;
+	background: var(--ma-surface);
+	color: var(--ma-ink);
+}
+
+.ma-table-filter-input:focus {
+	outline: none;
+	border-color: var(--ma-accent);
+}
+
+.ma-table tbody tr {
+	cursor: pointer;
+	transition: background 0.1s ease;
+}
+
+.ma-table tbody tr:hover {
+	background: var(--ma-surface-2);
+}
+
+.ma-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
 /* ---- load more ------------------------------------------------------------ */
 
 .ma-load-more {

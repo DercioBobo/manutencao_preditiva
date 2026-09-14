@@ -11,6 +11,7 @@ frappe.pages["meus-achados"].on_page_show = function (wrapper) {
 	if (!wrapper.ma) return;
 	wrapper.ma.load_entries();
 	wrapper.ma.load_dashboard();
+	if (wrapper.ma.table_rows) wrapper.ma.load_table_data();
 };
 
 const MA_PAGE_SIZE = 50;
@@ -63,6 +64,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.severity_filter = "";
 		this.search_term = "";
 
+		this.table_rows = null;
+		this.table_sort = { field: "creation", dir: "desc" };
+		this.table_filters = { equipamento: "", area: "", severidade: "", estado: "" };
+
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
 			title: __("Meus Achados"),
@@ -85,12 +90,38 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.render_dashboard_shell(this.$tab_painel_content);
 
-		this.$summary = $('<div class="ma-summary">').appendTo(this.$tab_achados_content);
-		this.render_filters(this.$tab_achados_content);
-		this.$list = $('<div class="ma-list">').appendTo(this.$tab_achados_content);
-		this.$load_more_wrap = $('<div class="ma-load-more">').appendTo(this.$tab_achados_content).hide();
+		this.render_view_toggle(this.$tab_achados_content);
+
+		this.$card_view = $('<div>').appendTo(this.$tab_achados_content);
+		this.$summary = $('<div class="ma-summary">').appendTo(this.$card_view);
+		this.render_filters(this.$card_view);
+		this.$list = $('<div class="ma-list">').appendTo(this.$card_view);
+		this.$load_more_wrap = $('<div class="ma-load-more">').appendTo(this.$card_view).hide();
 		this.$load_more_btn = $(`<button class="ma-btn">${__("Carregar mais")}</button>`).appendTo(this.$load_more_wrap);
 		this.$load_more_btn.on("click", () => this.load_entries(true));
+
+		this.render_table_shell(this.$tab_achados_content);
+	}
+
+	// ---- view toggle: cards / table -----------------------------------------
+
+	render_view_toggle($parent) {
+		const $toggle = $('<div class="ma-view-toggle">').appendTo($parent);
+		this.$view_cards_btn = $(`<button class="ma-view-btn active">${__("Cartões")}</button>`).appendTo($toggle);
+		this.$view_table_btn = $(`<button class="ma-view-btn">${__("Tabela")}</button>`).appendTo($toggle);
+		this.$view_cards_btn.on("click", () => this.switch_view("cards"));
+		this.$view_table_btn.on("click", () => this.switch_view("table"));
+		this.view_mode = "cards";
+	}
+
+	switch_view(mode) {
+		this.view_mode = mode;
+		const is_cards = mode === "cards";
+		this.$view_cards_btn.toggleClass("active", is_cards);
+		this.$view_table_btn.toggleClass("active", !is_cards);
+		this.$card_view.toggle(is_cards);
+		this.$table_view.toggle(!is_cards);
+		if (!is_cards && !this.table_rows) this.load_table_data();
 	}
 
 	// ---- tabs -------------------------------------------------------------------
@@ -540,6 +571,196 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		return $card;
 	}
 
+	// ---- table view: sortable columns + per-column filters --------------------
+
+	get_table_columns() {
+		return [
+			{
+				field: "severidade",
+				label: __("Severidade"),
+				sortable: true,
+				filter: "select",
+				filterKey: "severidade",
+				options: MA_SEVERIDADE_OPTIONS,
+			},
+			{ field: "equipamento_nome", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
+			{ field: "componente", label: __("Componente") },
+			{ field: "area_nome", label: __("Área / Planta"), sortable: true, filter: "text", filterKey: "area" },
+			{
+				field: "estado_da_accao",
+				label: __("Estado"),
+				sortable: true,
+				filter: "select",
+				filterKey: "estado",
+				options: MA_ESTADO_OPTIONS,
+			},
+			{ field: "descricao_do_defeito", label: __("Descrição do Defeito") },
+			{ field: "creation", label: __("Quando"), sortable: true },
+		];
+	}
+
+	render_table_shell($parent) {
+		this.$table_view = $('<div class="ma-table-wrap">').appendTo($parent).hide();
+		this.$table_view.html(`<div class="ma-empty">${__("A carregar...")}</div>`);
+	}
+
+	load_table_data() {
+		this.$table_view.html(`<div class="ma-empty">${__("A carregar...")}</div>`);
+
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					fields: [
+						"name",
+						"area_planta",
+						"area_planta.area as area_nome",
+						"equipamento_referencia",
+						"equipamento_referencia.equipamento as equipamento_nome",
+						"componente",
+						"severidade",
+						"descricao_do_defeito",
+						"estado_da_accao",
+						"creation",
+					],
+					order_by: "creation desc",
+					limit_page_length: 500,
+				},
+			})
+			.then((r) => {
+				this.table_rows = r.message || [];
+				this.build_table();
+			});
+	}
+
+	build_table() {
+		const columns = this.get_table_columns();
+		this.$table_view.empty();
+
+		const $table = $('<table class="ma-table">').appendTo(this.$table_view);
+		const $thead = $("<thead>").appendTo($table);
+
+		const $header_row = $("<tr>").appendTo($thead);
+		columns.forEach((col) => {
+			const $th = $("<th>").attr("data-field", col.field).appendTo($header_row);
+			$("<span>").text(col.label).appendTo($th);
+			if (col.sortable) {
+				$th.addClass("ma-th-sortable");
+				$('<span class="ma-sort-arrow">').appendTo($th);
+				$th.on("click", () => this.toggle_table_sort(col.field));
+			}
+		});
+
+		const $filter_row = $('<tr class="ma-table-filter-row">').appendTo($thead);
+		columns.forEach((col) => {
+			const $td = $("<th>").appendTo($filter_row);
+			if (col.filter === "text") {
+				const $input = $(`<input type="text" class="ma-table-filter-input" placeholder="${__("Filtrar...")}">`).appendTo(
+					$td
+				);
+				$input.val(this.table_filters[col.filterKey] || "");
+				$input.on("input", () => {
+					this.table_filters[col.filterKey] = $input.val();
+					this.render_table_rows();
+				});
+			} else if (col.filter === "select") {
+				const $select = $('<select class="ma-table-filter-input">').appendTo($td);
+				$(`<option value="">${__("Todas")}</option>`).appendTo($select);
+				col.options.forEach((o) => $(`<option value="${o}">${o}</option>`).appendTo($select));
+				$select.val(this.table_filters[col.filterKey] || "");
+				$select.on("change", () => {
+					this.table_filters[col.filterKey] = $select.val();
+					this.render_table_rows();
+				});
+			}
+		});
+
+		this.$table_tbody = $("<tbody>").appendTo($table);
+		this.render_table_rows();
+		this.update_sort_indicators();
+	}
+
+	get_table_sort_value(row, field) {
+		if (field === "severidade") return MA_SEVERIDADE_OPTIONS.indexOf(row.severidade);
+		if (field === "estado_da_accao") return MA_ESTADO_OPTIONS.indexOf(row.estado_da_accao || "Pendente");
+		return (row[field] || "").toString().toLowerCase();
+	}
+
+	toggle_table_sort(field) {
+		if (this.table_sort.field === field) {
+			this.table_sort.dir = this.table_sort.dir === "asc" ? "desc" : "asc";
+		} else {
+			this.table_sort = { field, dir: "asc" };
+		}
+		this.render_table_rows();
+		this.update_sort_indicators();
+	}
+
+	update_sort_indicators() {
+		this.$table_view.find(".ma-th-sortable").each((_, el) => {
+			const $th = $(el);
+			const is_active = $th.attr("data-field") === this.table_sort.field;
+			$th.find(".ma-sort-arrow").text(is_active ? (this.table_sort.dir === "asc" ? " ▲" : " ▼") : "");
+		});
+	}
+
+	render_table_rows() {
+		const columns = this.get_table_columns();
+		let rows = (this.table_rows || []).filter((row) => {
+			if (this.table_filters.equipamento) {
+				const v = (row.equipamento_nome || row.equipamento_referencia || "").toLowerCase();
+				if (!v.includes(this.table_filters.equipamento.toLowerCase())) return false;
+			}
+			if (this.table_filters.area) {
+				const v = (row.area_nome || row.area_planta || "").toLowerCase();
+				if (!v.includes(this.table_filters.area.toLowerCase())) return false;
+			}
+			if (this.table_filters.severidade && row.severidade !== this.table_filters.severidade) return false;
+			if (this.table_filters.estado && (row.estado_da_accao || "Pendente") !== this.table_filters.estado) return false;
+			return true;
+		});
+
+		const { field, dir } = this.table_sort;
+		rows = rows.slice().sort((a, b) => {
+			const va = this.get_table_sort_value(a, field);
+			const vb = this.get_table_sort_value(b, field);
+			if (va < vb) return dir === "asc" ? -1 : 1;
+			if (va > vb) return dir === "asc" ? 1 : -1;
+			return 0;
+		});
+
+		this.$table_tbody.empty();
+
+		if (!rows.length) {
+			const $empty_row = $("<tr>").appendTo(this.$table_tbody);
+			$(`<td colspan="${columns.length}">`)
+				.html(`<div class="ma-empty">${__("Nenhum achado corresponde ao filtro.")}</div>`)
+				.appendTo($empty_row);
+			return;
+		}
+
+		rows.forEach((row) => {
+			const $tr = $("<tr>").appendTo(this.$table_tbody);
+			columns.forEach((col) => {
+				const $td = $("<td>").appendTo($tr);
+				if (col.field === "severidade") {
+					const cls = MA_SEVERIDADE_BADGE[row.severidade] || "ma-badge-nao-recolhido";
+					$(`<span class="ma-badge ${cls}">`).text(row.severidade || "").appendTo($td);
+				} else if (col.field === "estado_da_accao") {
+					const estado = row.estado_da_accao || __("Pendente");
+					const cls = MA_ESTADO_BADGE[row.estado_da_accao] || "ma-badge-pendente";
+					$(`<span class="ma-badge ${cls}">`).text(estado).appendTo($td);
+				} else if (col.field === "creation") {
+					$td.html(comment_when(row.creation));
+				} else {
+					$td.text(row[col.field] || "").attr("title", row[col.field] || "");
+				}
+			});
+			$tr.on("click", () => this.open_achado_dialog({ data: row }));
+		});
+	}
+
 	// ---- detail + response dialog -----------------------------------------------
 
 	build_summary_html(data) {
@@ -668,6 +889,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					this.render_summary_bar();
 				}
 				this.load_dashboard();
+				if (this.table_rows) this.load_table_data();
 			})
 			.always(() => {
 				dialog.get_primary_btn().prop("disabled", false);

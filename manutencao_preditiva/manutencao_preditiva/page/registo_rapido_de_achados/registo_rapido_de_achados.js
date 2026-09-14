@@ -24,6 +24,15 @@ const RRA_BADGE_CLASS = {
 	"Não Recolhido": "rra-badge-nao-recolhido",
 };
 
+const RRA_ESTADO_OPTIONS = ["Pendente", "Em Curso", "Concluído", "Não Aplicável"];
+
+const RRA_ESTADO_BADGE_CLASS = {
+	Pendente: "rra-badge-pendente",
+	"Em Curso": "rra-badge-em-curso",
+	Concluído: "rra-badge-concluido",
+	"Não Aplicável": "rra-badge-na",
+};
+
 manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	constructor(wrapper) {
 		this.wrapper = wrapper;
@@ -35,6 +44,10 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.search_term = "";
 		this.area_name_cache = {};
 		this.equipamento_name_cache = {};
+
+		this.table_rows = null;
+		this.table_sort = { field: "creation", dir: "desc" };
+		this.table_filters = { equipamento: "", area: "", severidade: "", estado: "" };
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
@@ -48,15 +61,42 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	render_shell() {
 		this.$container = $('<div class="rra">').appendTo(this.page.body);
 		this.render_toolbar();
-		this.$summary = $('<div class="rra-summary">').appendTo(this.$container);
+
+		this.render_view_toggle();
+
+		this.$card_view = $("<div>").appendTo(this.$container);
+		this.$summary = $('<div class="rra-summary">').appendTo(this.$card_view);
 		this.render_filters();
-		this.$list = $('<div class="rra-list">').appendTo(this.$container);
-		this.$load_more_wrap = $('<div class="rra-load-more">').appendTo(this.$container).hide();
+		this.$list = $('<div class="rra-list">').appendTo(this.$card_view);
+		this.$load_more_wrap = $('<div class="rra-load-more">').appendTo(this.$card_view).hide();
 		this.$load_more_btn = $(`<button class="rra-btn rra-btn-ghost">${__("Carregar mais")}</button>`).appendTo(
 			this.$load_more_wrap
 		);
 		this.$load_more_btn.on("click", () => this.load_saved(true));
 		this.refresh_list();
+
+		this.render_table_shell();
+	}
+
+	// ---- view toggle: cards / table -----------------------------------------
+
+	render_view_toggle() {
+		const $toggle = $('<div class="rra-view-toggle">').appendTo(this.$container);
+		this.$view_cards_btn = $(`<button class="rra-view-btn active">${__("Cartões")}</button>`).appendTo($toggle);
+		this.$view_table_btn = $(`<button class="rra-view-btn">${__("Tabela")}</button>`).appendTo($toggle);
+		this.$view_cards_btn.on("click", () => this.switch_view("cards"));
+		this.$view_table_btn.on("click", () => this.switch_view("table"));
+		this.view_mode = "cards";
+	}
+
+	switch_view(mode) {
+		this.view_mode = mode;
+		const is_cards = mode === "cards";
+		this.$view_cards_btn.toggleClass("active", is_cards);
+		this.$view_table_btn.toggleClass("active", !is_cards);
+		this.$card_view.toggle(is_cards);
+		this.$table_view.toggle(!is_cards);
+		if (!is_cards && !this.table_rows) this.load_table_data();
 	}
 
 	// ---- toolbar: campanha + "novo achado" -------------------------------
@@ -94,6 +134,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 	on_campanha_change() {
 		const campanha = this.campanha_control.get_value();
+		this.table_rows = null; // scoped per-campanha - stale once the selection changes
 
 		if (!campanha) {
 			this.campanha_info = null;
@@ -101,6 +142,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			this.$add_btn.prop("disabled", true);
 			this.saved_entries = [];
 			this.refresh_list();
+			if (this.view_mode === "table") this.load_table_data();
 			return;
 		}
 
@@ -112,6 +154,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			);
 			this.$add_btn.prop("disabled", false);
 			this.last_area_value = "";
+			if (this.view_mode === "table") this.load_table_data();
 			this.load_saved();
 		});
 	}
@@ -119,7 +162,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	// ---- filters: search + severity chips -----------------------------------
 
 	render_filters() {
-		this.$filters = $('<div class="rra-filters">').appendTo(this.$container);
+		this.$filters = $('<div class="rra-filters">').appendTo(this.$card_view);
 
 		this.$search = $(
 			`<input type="text" class="rra-search" placeholder="${__("Pesquisar por equipamento, área, descrição...")}">`
@@ -344,6 +387,205 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		return $card;
 	}
 
+	// ---- table view: sortable columns + per-column filters --------------------
+	// Scoped to the currently selected Campanha, same as the card list.
+
+	get_table_columns() {
+		return [
+			{
+				field: "severidade",
+				label: __("Severidade"),
+				sortable: true,
+				filter: "select",
+				filterKey: "severidade",
+				options: RRA_SEVERIDADES,
+			},
+			{ field: "equipamento_nome", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
+			{ field: "componente", label: __("Componente") },
+			{ field: "area_nome", label: __("Área / Planta"), sortable: true, filter: "text", filterKey: "area" },
+			{
+				field: "estado_da_accao",
+				label: __("Estado"),
+				sortable: true,
+				filter: "select",
+				filterKey: "estado",
+				options: RRA_ESTADO_OPTIONS,
+			},
+			{ field: "descricao_do_defeito", label: __("Descrição do Defeito") },
+			{ field: "creation", label: __("Quando"), sortable: true },
+		];
+	}
+
+	render_table_shell() {
+		this.$table_view = $('<div class="rra-table-wrap">').appendTo(this.$container).hide();
+		this.$table_view.html(`<div class="rra-empty">${__("Selecione uma campanha para ver a tabela.")}</div>`);
+	}
+
+	load_table_data() {
+		const campanha = this.campanha_control.get_value();
+		if (!campanha) {
+			this.table_rows = null;
+			this.$table_view.html(`<div class="rra-empty">${__("Selecione uma campanha para ver a tabela.")}</div>`);
+			return;
+		}
+
+		this.$table_view.html(`<div class="rra-empty">${__("A carregar...")}</div>`);
+
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					filters: { campanha },
+					fields: [
+						"name",
+						"area_planta",
+						"area_planta.area as area_nome",
+						"equipamento_referencia",
+						"equipamento_referencia.equipamento as equipamento_nome",
+						"componente",
+						"severidade",
+						"descricao_do_defeito",
+						"estado_da_accao",
+						"creation",
+					],
+					order_by: "creation desc",
+					limit_page_length: 0,
+				},
+			})
+			.then((r) => {
+				this.table_rows = r.message || [];
+				this.build_table();
+			});
+	}
+
+	build_table() {
+		const columns = this.get_table_columns();
+		this.$table_view.empty();
+
+		const $table = $('<table class="rra-table">').appendTo(this.$table_view);
+		const $thead = $("<thead>").appendTo($table);
+
+		const $header_row = $("<tr>").appendTo($thead);
+		columns.forEach((col) => {
+			const $th = $("<th>").attr("data-field", col.field).appendTo($header_row);
+			$("<span>").text(col.label).appendTo($th);
+			if (col.sortable) {
+				$th.addClass("rra-th-sortable");
+				$('<span class="rra-sort-arrow">').appendTo($th);
+				$th.on("click", () => this.toggle_table_sort(col.field));
+			}
+		});
+
+		const $filter_row = $('<tr class="rra-table-filter-row">').appendTo($thead);
+		columns.forEach((col) => {
+			const $td = $("<th>").appendTo($filter_row);
+			if (col.filter === "text") {
+				const $input = $(`<input type="text" class="rra-table-filter-input" placeholder="${__("Filtrar...")}">`).appendTo(
+					$td
+				);
+				$input.val(this.table_filters[col.filterKey] || "");
+				$input.on("input", () => {
+					this.table_filters[col.filterKey] = $input.val();
+					this.render_table_rows();
+				});
+			} else if (col.filter === "select") {
+				const $select = $('<select class="rra-table-filter-input">').appendTo($td);
+				$(`<option value="">${__("Todas")}</option>`).appendTo($select);
+				col.options.forEach((o) => $(`<option value="${o}">${o}</option>`).appendTo($select));
+				$select.val(this.table_filters[col.filterKey] || "");
+				$select.on("change", () => {
+					this.table_filters[col.filterKey] = $select.val();
+					this.render_table_rows();
+				});
+			}
+		});
+
+		this.$table_tbody = $("<tbody>").appendTo($table);
+		this.render_table_rows();
+		this.update_sort_indicators();
+	}
+
+	get_table_sort_value(row, field) {
+		if (field === "severidade") return RRA_SEVERIDADES.indexOf(row.severidade);
+		if (field === "estado_da_accao") return RRA_ESTADO_OPTIONS.indexOf(row.estado_da_accao || "Pendente");
+		return (row[field] || "").toString().toLowerCase();
+	}
+
+	toggle_table_sort(field) {
+		if (this.table_sort.field === field) {
+			this.table_sort.dir = this.table_sort.dir === "asc" ? "desc" : "asc";
+		} else {
+			this.table_sort = { field, dir: "asc" };
+		}
+		this.render_table_rows();
+		this.update_sort_indicators();
+	}
+
+	update_sort_indicators() {
+		this.$table_view.find(".rra-th-sortable").each((_, el) => {
+			const $th = $(el);
+			const is_active = $th.attr("data-field") === this.table_sort.field;
+			$th.find(".rra-sort-arrow").text(is_active ? (this.table_sort.dir === "asc" ? " ▲" : " ▼") : "");
+		});
+	}
+
+	render_table_rows() {
+		const columns = this.get_table_columns();
+		let rows = (this.table_rows || []).filter((row) => {
+			if (this.table_filters.equipamento) {
+				const v = (row.equipamento_nome || row.equipamento_referencia || "").toLowerCase();
+				if (!v.includes(this.table_filters.equipamento.toLowerCase())) return false;
+			}
+			if (this.table_filters.area) {
+				const v = (row.area_nome || row.area_planta || "").toLowerCase();
+				if (!v.includes(this.table_filters.area.toLowerCase())) return false;
+			}
+			if (this.table_filters.severidade && row.severidade !== this.table_filters.severidade) return false;
+			if (this.table_filters.estado && (row.estado_da_accao || "Pendente") !== this.table_filters.estado) return false;
+			return true;
+		});
+
+		const { field, dir } = this.table_sort;
+		rows = rows.slice().sort((a, b) => {
+			const va = this.get_table_sort_value(a, field);
+			const vb = this.get_table_sort_value(b, field);
+			if (va < vb) return dir === "asc" ? -1 : 1;
+			if (va > vb) return dir === "asc" ? 1 : -1;
+			return 0;
+		});
+
+		this.$table_tbody.empty();
+
+		if (!rows.length) {
+			const $empty_row = $("<tr>").appendTo(this.$table_tbody);
+			$(`<td colspan="${columns.length}">`)
+				.html(`<div class="rra-empty">${__("Nenhum achado corresponde ao filtro.")}</div>`)
+				.appendTo($empty_row);
+			return;
+		}
+
+		rows.forEach((row) => {
+			const $tr = $("<tr>").appendTo(this.$table_tbody);
+			columns.forEach((col) => {
+				const $td = $("<td>").appendTo($tr);
+				if (col.field === "severidade") {
+					const cls = RRA_BADGE_CLASS[row.severidade] || "rra-badge-nao-recolhido";
+					$(`<span class="rra-badge ${cls}">`).text(row.severidade || "").appendTo($td);
+				} else if (col.field === "estado_da_accao") {
+					const estado = row.estado_da_accao || __("Pendente");
+					const cls = RRA_ESTADO_BADGE_CLASS[row.estado_da_accao] || "rra-badge-pendente";
+					$(`<span class="rra-badge ${cls}">`).text(estado).appendTo($td);
+				} else if (col.field === "creation") {
+					$td.html(comment_when(row.creation));
+				} else {
+					$td.text(row[col.field] || "").attr("title", row[col.field] || "");
+				}
+			});
+			$tr.on("click", () => this.open_achado_dialog({ mode: "edit", name: row.name }));
+		});
+	}
+
 	// ---- create / edit dialog ------------------------------------------------
 
 	get_dialog_fields() {
@@ -477,6 +719,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				entry.$card = this.build_view_card(entry);
 				this.saved_entries.unshift(entry);
 				this.refresh_list();
+				if (this.table_rows) this.load_table_data();
 			})
 			.always(() => {
 				dialog.get_primary_btn().prop("disabled", false);
@@ -503,6 +746,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 					$old_card.replaceWith(entry.$card);
 					this.apply_filters();
 				}
+				if (this.table_rows) this.load_table_data();
 			})
 			.always(() => {
 				dialog.get_primary_btn().prop("disabled", false);
