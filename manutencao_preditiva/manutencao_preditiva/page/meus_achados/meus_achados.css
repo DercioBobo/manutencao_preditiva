@@ -406,11 +406,19 @@
 }
 
 .ma-main {
-	flex: 1 1 auto;
-	min-width: 240px;
+	flex: 1 1 240px;
+	min-width: 0;
+	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+}
+
+.ma-title,
+.ma-sub {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .ma-title {

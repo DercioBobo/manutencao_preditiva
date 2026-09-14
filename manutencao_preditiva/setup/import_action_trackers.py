@@ -469,7 +469,11 @@ def _cstr(value):
 def _to_float(value):
 	if value in (None, ""):
 		return None
-	return float(value)
+	# round(..., 2): the source workbook's own "Temperature Difference over
+	# Max" column is itself a computed value, and openpyxl reads it back as
+	# a raw IEEE-754 float (e.g. -24.200000000000003) - round it here once,
+	# at the source, rather than at every place a temperature gets displayed.
+	return round(float(value), 2)
 
 
 def _classify_thermo_severity(cell):

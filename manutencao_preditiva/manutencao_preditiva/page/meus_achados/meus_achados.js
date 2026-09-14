@@ -554,10 +554,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			rows.push([__("Plano de Monitorização"), frappe.utils.escape_html(data.plano_de_monitorizacao)]);
 
 		if (data.tecnica === "Termografia") {
+			const fmt = (v) => Math.round(v * 100) / 100;
 			const temps = [];
-			if (data.temp_max_operacao != null) temps.push(`${__("Máx. Operação")}: ${data.temp_max_operacao}°C`);
-			if (data.temp_actual != null) temps.push(`${__("Actual")}: ${data.temp_actual}°C`);
-			if (data.temp_ambiente != null) temps.push(`${__("Ambiente")}: ${data.temp_ambiente}°C`);
+			if (data.temp_max_operacao != null) temps.push(`${__("Máx. Operação")}: ${fmt(data.temp_max_operacao)}°C`);
+			if (data.temp_actual != null) temps.push(`${__("Actual")}: ${fmt(data.temp_actual)}°C`);
+			if (data.temp_ambiente != null) temps.push(`${__("Ambiente")}: ${fmt(data.temp_ambiente)}°C`);
 			if (temps.length) rows.push([__("Temperaturas"), temps.join(" · ")]);
 		}
 

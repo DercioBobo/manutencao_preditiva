@@ -12,7 +12,7 @@ class AchadoDeInspecao(Document):
 
 	def calcular_diferenca_de_temperatura(self):
 		if self.temp_actual is not None and self.temp_max_operacao is not None:
-			self.diferenca_sobre_max = flt(self.temp_actual) - flt(self.temp_max_operacao)
+			self.diferenca_sobre_max = flt(flt(self.temp_actual) - flt(self.temp_max_operacao), 2)
 
 	def definir_data_de_conclusao(self):
 		if self.estado_da_accao == "Concluído" and not self.data_de_conclusao:

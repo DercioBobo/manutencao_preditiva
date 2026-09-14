@@ -255,11 +255,19 @@
 }
 
 .rra-saved-main {
-	flex: 1 1 auto;
-	min-width: 240px;
+	flex: 1 1 240px;
+	min-width: 0;
+	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+}
+
+.rra-saved-title,
+.rra-saved-sub {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .rra-saved-title {
