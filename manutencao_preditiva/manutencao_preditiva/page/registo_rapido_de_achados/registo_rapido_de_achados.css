@@ -320,6 +320,139 @@
 	background: var(--rra-gray);
 }
 
+.rra-badge-pendente {
+	background: var(--rra-amber);
+}
+
+.rra-badge-em-curso {
+	background: var(--rra-blue);
+}
+
+.rra-badge-concluido {
+	background: var(--rra-green);
+}
+
+.rra-badge-na {
+	background: var(--rra-gray);
+}
+
+/* ---- view toggle: cartões / tabela ----------------------------------------- */
+
+.rra-view-toggle {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 14px;
+}
+
+.rra-view-btn {
+	border: 1px solid var(--rra-line);
+	background: var(--rra-surface);
+	color: var(--rra-muted);
+	border-radius: 8px;
+	padding: 6px 14px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.12s ease;
+}
+
+.rra-view-btn:hover {
+	background: var(--rra-surface-2);
+}
+
+.rra-view-btn.active {
+	background: var(--rra-accent);
+	border-color: var(--rra-accent);
+	color: #fff;
+}
+
+/* ---- table view ------------------------------------------------------------ */
+
+.rra-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--rra-line);
+	border-radius: var(--rra-radius);
+	background: var(--rra-surface);
+}
+
+.rra-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.rra-table th,
+.rra-table td {
+	padding: 8px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--rra-line);
+	white-space: nowrap;
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rra-table thead th {
+	color: var(--rra-muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	font-size: 11px;
+	background: var(--rra-surface-2);
+	position: sticky;
+	top: 0;
+	white-space: nowrap;
+}
+
+.rra-th-sortable {
+	cursor: pointer;
+	user-select: none;
+}
+
+.rra-th-sortable:hover {
+	color: var(--rra-ink);
+}
+
+.rra-sort-arrow {
+	display: inline-block;
+	width: 10px;
+	color: var(--rra-accent);
+}
+
+.rra-table-filter-row th {
+	background: var(--rra-surface);
+	padding: 6px 10px;
+}
+
+.rra-table-filter-input {
+	width: 100%;
+	min-width: 90px;
+	padding: 4px 7px;
+	font-size: 11px;
+	border: 1px solid var(--rra-line);
+	border-radius: 6px;
+	background: var(--rra-surface);
+	color: var(--rra-ink);
+}
+
+.rra-table-filter-input:focus {
+	outline: none;
+	border-color: var(--rra-accent);
+}
+
+.rra-table tbody tr {
+	cursor: pointer;
+	transition: background 0.1s ease;
+}
+
+.rra-table tbody tr:hover {
+	background: var(--rra-surface-2);
+}
+
+.rra-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
 /* ---- empty state -------------------------------------------------------- */
 
 .rra-empty {
