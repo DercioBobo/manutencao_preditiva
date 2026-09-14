@@ -54,6 +54,13 @@ const MA_ESTADO_HEX = {
 	"Não Aplicável": "#6b7680",
 };
 
+function hex_to_rgba(hex, alpha) {
+	const r = parseInt(hex.slice(1, 3), 16);
+	const g = parseInt(hex.slice(3, 5), 16);
+	const b = parseInt(hex.slice(5, 7), 16);
+	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 manutencao_preditiva.MeusAchados = class MeusAchados {
 	constructor(wrapper) {
 		this.wrapper = wrapper;
@@ -152,6 +159,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	render_dashboard_shell($parent) {
 		this.$dashboard = $('<div class="ma-dashboard">').appendTo($parent);
+		this.$dashboard_filter_note = $('<div class="ma-dashboard-filter-note">').appendTo(this.$dashboard);
 		this.$tiles = $('<div class="ma-tiles">').appendTo(this.$dashboard);
 
 		const $charts_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
@@ -162,6 +170,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.$rank_areas = this.make_chart_card($rankings_row, __("Áreas com Mais Achados"));
 		this.$rank_equipamentos = this.make_chart_card($rankings_row, __("Equipamentos com Mais Achados"));
 
+		const $crosstab_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
+		this.$crosstab_areas = this.make_chart_card($crosstab_row, __("Área × Severidade"));
+		this.$crosstab_equipamentos = this.make_chart_card($crosstab_row, __("Equipamento × Severidade"));
+
 		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Campanha (Inspeção)"));
 	}
 
@@ -171,8 +183,39 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		return $('<div class="ma-chart-body">').appendTo($card);
 	}
 
+	// Drives the charts/rankings/crosstabs/trend (NOT the 4 stat tiles,
+	// which stay global - see load_dashboard). Reflects the Achados tab's
+	// severity/estado filters; free-text search is deliberately excluded -
+	// it's a per-record match, not something meaningful to aggregate.
+	get_dashboard_base_filters() {
+		const filters = {};
+		if (this.severity_filter) filters.severidade = this.severity_filter;
+		if (this.active_estado !== "all") filters.estado_da_accao = this.active_estado;
+		return filters;
+	}
+
+	render_dashboard_filter_note() {
+		const base = this.get_dashboard_base_filters();
+		const parts = [];
+		if (base.severidade) parts.push(`${__("Severidade")}: <b>${frappe.utils.escape_html(base.severidade)}</b>`);
+		if (base.estado_da_accao) parts.push(`${__("Estado")}: <b>${frappe.utils.escape_html(base.estado_da_accao)}</b>`);
+
+		if (!parts.length) {
+			this.$dashboard_filter_note.html(`<span>${__("A mostrar: todos os achados")}</span>`);
+		} else {
+			this.$dashboard_filter_note.html(`<span>${__("Filtrado por")}: ${parts.join(" · ")}</span>`);
+		}
+	}
+
 	load_dashboard() {
+		this.render_dashboard_filter_note();
+		const base = this.get_dashboard_base_filters();
+
 		Promise.all([
+			// The 4 stat tiles are a stable "health snapshot" - always global,
+			// never zeroed out just because the Achados tab happens to be
+			// filtered to something else right now. Only the charts below
+			// (rankings, crosstabs, trend) are filter-aware.
 			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Achado De Inspecao" } }),
 			frappe.call({
 				method: "frappe.client.get_count",
@@ -199,6 +242,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters: base,
 					fields: ["severidade", "count(name) as total"],
 					group_by: "severidade",
 				},
@@ -207,6 +251,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters: base,
 					fields: ["estado_da_accao", "count(name) as total"],
 					group_by: "estado_da_accao",
 				},
@@ -215,6 +260,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters: base,
 					fields: ["campanha", "count(name) as total"],
 					group_by: "campanha",
 				},
@@ -232,6 +278,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters: base,
 					fields: [
 						"area_planta",
 						"area_planta.area as area_nome",
@@ -246,6 +293,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters: base,
 					fields: [
 						"equipamento_referencia",
 						"equipamento_referencia.equipamento as equipamento_nome",
@@ -254,6 +302,34 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					group_by: "equipamento_referencia",
 					order_by: "total desc",
 					limit_page_length: 5,
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					filters: base,
+					fields: [
+						"area_planta",
+						"area_planta.area as area_nome",
+						"severidade",
+						"count(`tabAchado De Inspecao`.name) as total",
+					],
+					group_by: "area_planta, severidade",
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Achado De Inspecao",
+					filters: base,
+					fields: [
+						"equipamento_referencia",
+						"equipamento_referencia.equipamento as equipamento_nome",
+						"severidade",
+						"count(`tabAchado De Inspecao`.name) as total",
+					],
+					group_by: "equipamento_referencia, severidade",
 				},
 			}),
 		]).then((results) => {
@@ -268,6 +344,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				campanhas,
 				top_areas,
 				top_equipamentos,
+				crosstab_areas,
+				crosstab_equipamentos,
 			] = results.map((r) => r.message);
 			this.render_stat_tiles({
 				total: total || 0,
@@ -279,6 +357,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			this.render_estado_chart(by_estado || []);
 			this.render_ranking(this.$rank_areas, top_areas || [], "area_nome", "area_planta");
 			this.render_ranking(this.$rank_equipamentos, top_equipamentos || [], "equipamento_nome", "equipamento_referencia");
+			this.render_crosstab(this.$crosstab_areas, crosstab_areas || [], "area_nome", "area_planta");
+			this.render_crosstab(this.$crosstab_equipamentos, crosstab_equipamentos || [], "equipamento_nome", "equipamento_referencia");
 			this.render_trend_chart(by_campanha || [], campanhas || []);
 		});
 	}
@@ -361,6 +441,60 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			$('<div class="ma-rank-bar">').css("width", pct + "%").appendTo($wrap);
 			$('<div class="ma-rank-value">').text(row.total).appendTo($row);
 		});
+	}
+
+	// rows: one row per (dimension, severidade) combination with its count,
+	// e.g. [{area_planta, area_nome, severidade, total}, ...]. Pivots into a
+	// dimension × severidade grid, limited to the top 8 dimension values by
+	// total count so the table stays readable.
+	render_crosstab($body, rows, name_field, code_field) {
+		$body.empty();
+		if (!rows.length) return this.render_empty_chart($body);
+
+		const totals_by_dim = {};
+		const label_by_dim = {};
+		const matrix = {};
+		rows.forEach((row) => {
+			const key = row[code_field];
+			totals_by_dim[key] = (totals_by_dim[key] || 0) + row.total;
+			label_by_dim[key] = row[name_field] || key;
+			matrix[key] = matrix[key] || {};
+			matrix[key][row.severidade] = row.total;
+		});
+
+		const top_dims = Object.keys(totals_by_dim)
+			.sort((a, b) => totals_by_dim[b] - totals_by_dim[a])
+			.slice(0, 8);
+
+		const $table = $('<table class="ma-crosstab">').appendTo($body);
+		const $thead_row = $("<tr>").appendTo($("<thead>").appendTo($table));
+		$("<th>").appendTo($thead_row);
+		MA_SEVERIDADE_OPTIONS.forEach((sev) => $("<th>").text(sev).appendTo($thead_row));
+		$("<th>").text(__("Total")).appendTo($thead_row);
+
+		const $tbody = $("<tbody>").appendTo($table);
+		top_dims.forEach((dim) => {
+			const $row = $("<tr>").appendTo($tbody);
+			$("<td>").addClass("ma-crosstab-label").attr("title", label_by_dim[dim]).text(label_by_dim[dim]).appendTo($row);
+			MA_SEVERIDADE_OPTIONS.forEach((sev) => {
+				const count = (matrix[dim] && matrix[dim][sev]) || 0;
+				const $cell = $("<td>").addClass("ma-crosstab-cell").text(count || "–").appendTo($row);
+				if (count) {
+					$cell.css({
+						background: hex_to_rgba(MA_SEVERIDADE_HEX[sev], 0.14),
+						color: MA_SEVERIDADE_HEX[sev],
+						"font-weight": 700,
+					});
+				}
+			});
+			$("<td>").addClass("ma-crosstab-total").text(totals_by_dim[dim]).appendTo($row);
+		});
+
+		if (Object.keys(totals_by_dim).length > 8) {
+			$(`<div class="ma-crosstab-note">${__("A mostrar as 8 maiores de {0}.", [Object.keys(totals_by_dim).length])}</div>`).appendTo(
+				$body
+			);
+		}
 	}
 
 	render_trend_chart(campanha_counts, campanhas) {
