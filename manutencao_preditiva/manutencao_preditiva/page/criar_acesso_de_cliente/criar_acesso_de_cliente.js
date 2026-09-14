@@ -31,6 +31,10 @@ manutencao_preditiva.CriarAcessoDeCliente = class CriarAcessoDeCliente {
 		this.render_form();
 
 		this.$result = $('<div class="cac-result">').appendTo(this.$container).hide();
+
+		$('<h3 class="cac-section-title">').text(__("Acessos Existentes")).appendTo(this.$container);
+		this.$accounts_wrap = $('<div class="cac-accounts-wrap">').appendTo(this.$container);
+		this.load_accounts();
 	}
 
 	render_form() {
@@ -114,6 +118,7 @@ manutencao_preditiva.CriarAcessoDeCliente = class CriarAcessoDeCliente {
 			callback: (r) => {
 				if (!r.message) return;
 				this.render_result(r.message, { full_name, customer });
+				this.load_accounts();
 			},
 		});
 	}
@@ -178,5 +183,152 @@ manutencao_preditiva.CriarAcessoDeCliente = class CriarAcessoDeCliente {
 				.then(() => frappe.show_alert({ message: __("Copiado"), indicator: "green" }))
 				.catch(() => document.execCommand("copy"));
 		});
+	}
+
+	// ---- existing accounts: list + manage --------------------------------
+
+	load_accounts() {
+		frappe.call({
+			method: "manutencao_preditiva.api.listar_acessos_cliente",
+			callback: (r) => this.render_accounts(r.message || []),
+		});
+	}
+
+	render_accounts(rows) {
+		this.$accounts_wrap.empty();
+
+		if (!rows.length) {
+			$(`<p class="cac-empty">${__("Ainda não há acessos de cliente criados.")}</p>`).appendTo(this.$accounts_wrap);
+			return;
+		}
+
+		const $table_wrap = $('<div class="cac-table-wrap">').appendTo(this.$accounts_wrap);
+		const $table = $('<table class="cac-table">').appendTo($table_wrap);
+		$(
+			`<thead><tr>
+				<th>${__("Nome")}</th>
+				<th>${__("Email")}</th>
+				<th>${__("Cliente")}</th>
+				<th>${__("Estado")}</th>
+				<th>${__("Ações")}</th>
+			</tr></thead>`
+		).appendTo($table);
+		const $tbody = $("<tbody>").appendTo($table);
+
+		rows.forEach((row) => this.render_account_row($tbody, row));
+	}
+
+	render_account_row($tbody, row) {
+		const $tr = $("<tr>").appendTo($tbody);
+		$("<td>").text(row.full_name || "").appendTo($tr);
+		$("<td>").text(row.email).appendTo($tr);
+		$("<td>").text(row.customers || "—").appendTo($tr);
+
+		const badge_class = row.enabled ? "cac-badge-active" : "cac-badge-inactive";
+		const badge_label = row.enabled ? __("Ativo") : __("Inativo");
+		$(`<td><span class="cac-badge ${badge_class}">${badge_label}</span></td>`).appendTo($tr);
+
+		const $actions = $('<td class="cac-row-actions">').appendTo($tr);
+
+		$(`<button class="cac-btn cac-btn-sm">${__("Repor Password")}</button>`)
+			.appendTo($actions)
+			.on("click", () => this.reset_password(row));
+
+		$(`<button class="cac-btn cac-btn-sm">${row.enabled ? __("Desativar") : __("Ativar")}</button>`)
+			.appendTo($actions)
+			.on("click", () => this.toggle_enabled(row));
+
+		$(`<button class="cac-btn cac-btn-sm">${__("Mudar Cliente")}</button>`)
+			.appendTo($actions)
+			.on("click", () => this.change_customer(row));
+	}
+
+	reset_password(row) {
+		const message = `${__("Repor a password de")} ${frappe.utils.escape_html(row.email)}? ${__(
+			"A password atual deixa de funcionar de imediato."
+		)}`;
+		frappe.confirm(message, () => {
+			frappe.call({
+				method: "manutencao_preditiva.api.repor_password_cliente",
+				args: { email: row.email },
+				freeze: true,
+				freeze_message: __("A repor password…"),
+				callback: (r) => {
+					if (!r.message) return;
+					this.render_reset_result(row, r.message);
+				},
+			});
+		});
+	}
+
+	render_reset_result(row, result) {
+		this.$result.empty().show();
+		$(`<div class="cac-result-title">✓ ${__("Password reposta para")} ${frappe.utils.escape_html(row.email)}</div>`).appendTo(
+			this.$result
+		);
+		$(`<p class="cac-result-note">${__(
+			"Partilha esta nova password com o cliente, ou envia-lhe o link para ele escolher a dele:"
+		)}</p>`).appendTo(this.$result);
+		this.build_copy_row(__("Password"), result.password, this.$result);
+		this.build_copy_row(__("Link"), result.link, this.$result);
+		this.$result[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
+	}
+
+	toggle_enabled(row) {
+		const will_enable = !row.enabled;
+		const message = will_enable
+			? `${__("Ativar o acesso de")} ${frappe.utils.escape_html(row.email)}?`
+			: `${__("Desativar o acesso de")} ${frappe.utils.escape_html(row.email)}? ${__(
+					"As sessões abertas dele são terminadas de imediato."
+				)}`;
+
+		frappe.confirm(message, () => {
+			frappe.call({
+				method: "manutencao_preditiva.api.alternar_activo_cliente",
+				args: { email: row.email, enabled: will_enable ? 1 : 0 },
+				freeze: true,
+				callback: (r) => {
+					if (!r.message) return;
+					frappe.show_alert({
+						message: will_enable ? __("Acesso ativado") : __("Acesso desativado"),
+						indicator: "green",
+					});
+					this.load_accounts();
+				},
+			});
+		});
+	}
+
+	change_customer(row) {
+		frappe.prompt(
+			[
+				{
+					fieldtype: "Link",
+					fieldname: "customer",
+					label: __("Novo Cliente"),
+					options: "Customer",
+					reqd: 1,
+				},
+			],
+			(values) => {
+				const message = `${__("Mudar o cliente de")} ${frappe.utils.escape_html(row.email)} ${__("para")} ${frappe.utils.escape_html(
+					values.customer
+				)}? ${__("Deixa de ver os achados do cliente atual.")}`;
+				frappe.confirm(message, () => {
+					frappe.call({
+						method: "manutencao_preditiva.api.mudar_cliente",
+						args: { email: row.email, customer: values.customer },
+						freeze: true,
+						callback: (r) => {
+							if (!r.message) return;
+							frappe.show_alert({ message: __("Cliente alterado"), indicator: "green" });
+							this.load_accounts();
+						},
+					});
+				});
+			},
+			__("Mudar Cliente"),
+			__("Confirmar")
+		);
 	}
 };

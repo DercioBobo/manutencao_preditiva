@@ -8,7 +8,7 @@
 	--cac-radius: 12px;
 	--cac-shadow: 0 1px 2px rgba(20, 30, 38, 0.05), 0 4px 14px rgba(20, 30, 38, 0.04);
 
-	max-width: 560px;
+	max-width: 860px;
 	margin: 0 auto;
 	padding: 4px 4px 80px;
 	color: var(--cac-ink);
@@ -20,12 +20,14 @@
 }
 
 .cac-intro {
+	max-width: 560px;
 	color: var(--cac-muted);
 	font-size: 13px;
 	margin-bottom: 18px;
 }
 
 .cac-card {
+	max-width: 560px;
 	background: var(--cac-surface);
 	border: 1px solid var(--cac-line);
 	border-radius: var(--cac-radius);
@@ -78,6 +80,7 @@
 /* ---- result panel ------------------------------------------------------- */
 
 .cac-result {
+	max-width: 560px;
 	margin-top: 18px;
 	background: var(--cac-surface-2);
 	border: 1px solid var(--cac-line);
@@ -141,4 +144,83 @@
 	.cac-link-row {
 		flex-direction: column;
 	}
+}
+
+/* ---- existing accounts list --------------------------------------------- */
+
+.cac-section-title {
+	font-size: 14px;
+	font-weight: 700;
+	margin: 32px 0 12px;
+}
+
+.cac-empty {
+	color: var(--cac-muted);
+	font-size: 13px;
+	padding: 24px;
+	text-align: center;
+	border: 1px dashed var(--cac-line);
+	border-radius: var(--cac-radius);
+}
+
+.cac-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--cac-line);
+	border-radius: var(--cac-radius);
+	background: var(--cac-surface);
+}
+
+.cac-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.cac-table th,
+.cac-table td {
+	padding: 8px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--cac-line);
+	white-space: nowrap;
+}
+
+.cac-table thead th {
+	color: var(--cac-muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	font-size: 11px;
+	background: var(--cac-surface-2);
+}
+
+.cac-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.cac-badge {
+	display: inline-block;
+	padding: 2px 9px;
+	border-radius: 20px;
+	font-size: 11px;
+	font-weight: 700;
+	color: #fff;
+	white-space: nowrap;
+}
+
+.cac-badge-active {
+	background: #3a9d5b;
+}
+
+.cac-badge-inactive {
+	background: #6b7680;
+}
+
+.cac-row-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.cac-btn-sm {
+	padding: 5px 10px;
+	font-size: 11px;
 }

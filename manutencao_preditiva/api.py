@@ -5,6 +5,7 @@ import secrets
 
 import frappe
 from frappe import _
+from frappe.sessions import clear_sessions
 from frappe.utils import cint, get_url, validate_email_address
 from frappe.utils.password import update_password
 
@@ -163,3 +164,106 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 		"link": get_url(relative_link),
 		"email_sent": bool(send_welcome),
 	}
+
+
+def _require_cliente_portal_user(email):
+	"""Guard for the management endpoints below - they must only ever act on
+	accounts that are genuinely Cliente Portal logins, never an arbitrary
+	User, since this tool's role has no other permission on User at all."""
+	if not frappe.db.exists("Has Role", {"parent": email, "role": "Cliente Portal"}):
+		frappe.throw(_("{0} não é uma conta de Cliente Portal.").format(email))
+
+
+@frappe.whitelist()
+def listar_acessos_cliente():
+	"""Every Cliente Portal account, with the Customer(s) it's scoped to -
+	the read side of the Gestão de Acessos tool."""
+	frappe.only_for(ACCESS_MANAGER_ROLES)
+
+	return frappe.db.sql(
+		"""
+		select
+			u.name as email,
+			u.full_name,
+			u.enabled,
+			group_concat(distinct up.for_value separator ', ') as customers
+		from `tabUser` u
+		inner join `tabHas Role` hr on hr.parent = u.name and hr.role = 'Cliente Portal'
+		left join `tabUser Permission` up on up.user = u.name and up.allow = 'Customer'
+		group by u.name
+		order by u.full_name
+		""",
+		as_dict=True,
+	)
+
+
+@frappe.whitelist()
+def repor_password_cliente(email):
+	"""Fresh temp password + reset link for an existing Cliente Portal user -
+	same result shape as creation, so the UI can reuse the same copy-and-hand
+	-over flow."""
+	frappe.only_for(ACCESS_MANAGER_ROLES)
+	email = (email or "").strip()
+	_require_cliente_portal_user(email)
+
+	temp_password = _generate_temp_password()
+	update_password(email, temp_password)
+
+	user = frappe.get_doc("User", email)
+	relative_link = user._reset_password(send_email=False)
+
+	return {"email": email, "password": temp_password, "link": get_url(relative_link)}
+
+
+@frappe.whitelist()
+def alternar_activo_cliente(email, enabled):
+	"""Enable/disable a Cliente Portal login. Disabling also kills any
+	sessions already open for them - flipping the flag alone would leave an
+	already-logged-in tab working until it naturally expires."""
+	frappe.only_for(ACCESS_MANAGER_ROLES)
+	email = (email or "").strip()
+	_require_cliente_portal_user(email)
+	enabled = cint(enabled)
+
+	user = frappe.get_doc("User", email)
+	user.enabled = enabled
+	user.flags.ignore_permissions = True
+	user.save()
+
+	if not enabled:
+		clear_sessions(email)
+
+	return {"email": email, "enabled": enabled}
+
+
+@frappe.whitelist()
+def mudar_cliente(email, customer):
+	"""Repoint a Cliente Portal user at a different Customer - replaces every
+	existing Customer User Permission for them rather than adding to it, to
+	keep the app's one-customer-per-login assumption intact even if older or
+	manually-created data ever had more than one."""
+	frappe.only_for(ACCESS_MANAGER_ROLES)
+	email = (email or "").strip()
+	customer = (customer or "").strip()
+	_require_cliente_portal_user(email)
+
+	if not customer:
+		frappe.throw(_("Escolhe um cliente."))
+	if not frappe.db.exists("Customer", customer):
+		frappe.throw(_("O cliente {0} não existe.").format(customer))
+
+	frappe.db.delete("User Permission", {"user": email, "allow": "Customer"})
+
+	perm = frappe.get_doc(
+		{
+			"doctype": "User Permission",
+			"user": email,
+			"allow": "Customer",
+			"for_value": customer,
+			"apply_to_all_doctypes": 1,
+		}
+	)
+	perm.flags.ignore_permissions = True
+	perm.insert()
+
+	return {"email": email, "customer": customer}
