@@ -73,7 +73,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.table_rows = null;
 		this.table_sort = { field: "creation", dir: "desc" };
-		this.table_filters = { equipamento: "", area: "", severidade: "", estado: "" };
+		this.table_filters = { equipamento: "", area: "" };
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
@@ -97,6 +97,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.render_dashboard_shell(this.$tab_painel_content);
 
+		this.render_shared_filters(this.$tab_achados_content);
 		this.render_view_toggle(this.$tab_achados_content);
 
 		this.$card_view = $('<div>').appendTo(this.$tab_achados_content);
@@ -188,10 +189,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		return $('<div class="ma-chart-body">').appendTo($card);
 	}
 
-	// Drives the charts/rankings/crosstabs/trend (NOT the 4 stat tiles,
-	// which stay global - see load_dashboard). Reflects the Achados tab's
-	// severity/estado filters; free-text search is deliberately excluded -
-	// it's a per-record match, not something meaningful to aggregate.
+	// The single source of truth for the shared Severidade/Estado filter -
+	// used by the card list, the table, AND the dashboard charts/rankings/
+	// crosstabs/trend (NOT the 4 stat tiles, which stay global - see
+	// load_dashboard). Free-text search is deliberately excluded - it's a
+	// per-record match, not something meaningful to filter/aggregate by.
 	get_dashboard_base_filters() {
 		const filters = {};
 		if (this.severity_filter) filters.severidade = this.severity_filter;
@@ -530,26 +532,24 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	// ---- filters --------------------------------------------------------------
 
-	render_filters($parent) {
-		const $bar = $('<div class="ma-filters">').appendTo($parent);
-
-		this.$search = $(
-			`<input type="text" class="ma-search" placeholder="${__("Pesquisar por equipamento, área, descrição...")}">`
-		).appendTo($bar);
-		this.$search.on("input", () => {
-			this.search_term = (this.$search.val() || "").toLowerCase().trim();
-			this.apply_search();
-		});
+	// Severidade + Estado live here: ONE shared control, always visible
+	// regardless of Cards/Tabela, and they're real server-side filters -
+	// changing either immediately refreshes the card list, the table (if
+	// already loaded), AND the dashboard. This is what makes the graphs
+	// "dynamic by filter" rather than a snapshot that only updates when you
+	// happen to revisit the Painel tab.
+	render_shared_filters($parent) {
+		const $bar = $('<div class="ma-shared-filters">').appendTo($parent);
 
 		this.$severity_select = $('<select class="ma-select">').appendTo($bar);
 		$(`<option value="">${__("Todas as severidades")}</option>`).appendTo(this.$severity_select);
 		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$severity_select));
 		this.$severity_select.on("change", () => {
 			this.severity_filter = this.$severity_select.val();
-			this.load_entries();
+			this.on_shared_filters_change();
 		});
 
-		this.$chips = $('<div class="ma-chips">').appendTo($parent);
+		this.$chips = $('<div class="ma-chips">').appendTo($bar);
 		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
@@ -560,8 +560,30 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				this.active_estado = key;
 				this.$chips.find(".ma-chip").removeClass("active");
 				$chip.addClass("active");
-				this.load_entries();
+				this.on_shared_filters_change();
 			});
+		});
+	}
+
+	on_shared_filters_change() {
+		this.load_entries();
+		if (this.table_rows) this.load_table_data();
+		this.load_dashboard();
+	}
+
+	// Card-view-only: free-text, client-side narrowing of whatever's already
+	// loaded. Not a server filter, so (like before) it doesn't affect the
+	// table or the dashboard - there's no single field to aggregate a
+	// substring match by.
+	render_filters($parent) {
+		const $bar = $('<div class="ma-filters">').appendTo($parent);
+
+		this.$search = $(
+			`<input type="text" class="ma-search" placeholder="${__("Pesquisar por equipamento, área, descrição...")}">`
+		).appendTo($bar);
+		this.$search.on("input", () => {
+			this.search_term = (this.$search.val() || "").toLowerCase().trim();
+			this.apply_search();
 		});
 	}
 
@@ -633,9 +655,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	load_entries(append) {
 		if (!append) this.offset = 0;
 
-		const filters = {};
-		if (this.active_estado !== "all") filters.estado_da_accao = this.active_estado;
-		if (this.severity_filter) filters.severidade = this.severity_filter;
+		const filters = this.get_dashboard_base_filters();
 
 		this.$load_more_btn.prop("disabled", true).text(__("A carregar..."));
 
@@ -714,26 +734,16 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// ---- table view: sortable columns + per-column filters --------------------
 
 	get_table_columns() {
+		// Severidade/Estado are no longer filterable per-column here - they're
+		// server-side filters now, controlled by the shared bar above the
+		// Cards/Tabela toggle (so they also drive the card list + dashboard).
+		// Still sortable, since sorting the already-fetched rows is unrelated.
 		return [
-			{
-				field: "severidade",
-				label: __("Severidade"),
-				sortable: true,
-				filter: "select",
-				filterKey: "severidade",
-				options: MA_SEVERIDADE_OPTIONS,
-			},
+			{ field: "severidade", label: __("Severidade"), sortable: true },
 			{ field: "equipamento_nome", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
 			{ field: "componente", label: __("Componente") },
 			{ field: "area_nome", label: __("Área / Planta"), sortable: true, filter: "text", filterKey: "area" },
-			{
-				field: "estado_da_accao",
-				label: __("Estado"),
-				sortable: true,
-				filter: "select",
-				filterKey: "estado",
-				options: MA_ESTADO_OPTIONS,
-			},
+			{ field: "estado_da_accao", label: __("Estado"), sortable: true },
 			{ field: "descricao_do_defeito", label: __("Descrição do Defeito") },
 			{ field: "creation", label: __("Quando"), sortable: true },
 		];
@@ -747,11 +757,14 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	load_table_data() {
 		this.$table_view.html(`<div class="ma-empty">${__("A carregar...")}</div>`);
 
+		const filters = this.get_dashboard_base_filters();
+
 		frappe
 			.call({
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Achado De Inspecao",
+					filters,
 					fields: [
 						"name",
 						"area_planta",
@@ -856,8 +869,6 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				const v = (row.area_nome || row.area_planta || "").toLowerCase();
 				if (!v.includes(this.table_filters.area.toLowerCase())) return false;
 			}
-			if (this.table_filters.severidade && row.severidade !== this.table_filters.severidade) return false;
-			if (this.table_filters.estado && (row.estado_da_accao || "Pendente") !== this.table_filters.estado) return false;
 			return true;
 		});
 
