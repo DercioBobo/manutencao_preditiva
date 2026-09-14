@@ -282,6 +282,37 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		}
 	}
 
+	// Both resolvers fetch the link's display title and drop it into $el once
+	// it arrives - the filter note renders synchronously first (showing the
+	// raw code) so the UI never blocks on these two extra round-trips.
+	resolve_area_label(code, $el) {
+		$el.text(code);
+		this._area_label_cache = this._area_label_cache || {};
+		if (this._area_label_cache[code]) {
+			$el.text(this._area_label_cache[code]);
+			return;
+		}
+		frappe.db.get_value("Area De Inspecao", code, "area").then((r) => {
+			const label = (r.message && r.message.area) || code;
+			this._area_label_cache[code] = label;
+			$el.text(label);
+		});
+	}
+
+	resolve_equipamento_label(code, $el) {
+		$el.text(code);
+		this._equipamento_label_cache = this._equipamento_label_cache || {};
+		if (this._equipamento_label_cache[code]) {
+			$el.text(this._equipamento_label_cache[code]);
+			return;
+		}
+		frappe.db.get_value("Equipamento De Inspecao", code, "equipamento").then((r) => {
+			const label = (r.message && r.message.equipamento) || code;
+			this._equipamento_label_cache[code] = label;
+			$el.text(label);
+		});
+	}
+
 	load_dashboard() {
 		this.render_dashboard_filter_note();
 		const base = this.get_dashboard_base_filters();
