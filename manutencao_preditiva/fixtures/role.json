@@ -10,5 +10,11 @@
   "name": "Cliente Portal",
   "role_name": "Cliente Portal",
   "desk_access": 1
+ },
+ {
+  "doctype": "Role",
+  "name": "Gestor de Acessos de Cliente",
+  "role_name": "Gestor de Acessos de Cliente",
+  "desk_access": 1
  }
 ]

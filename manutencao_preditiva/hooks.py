@@ -20,15 +20,24 @@ required_apps = ["erpnext"]
 
 # Fixtures
 # --------
-# Exported so `bench get-app` + `bench migrate` reproduces the two roles
+# Exported so `bench get-app` + `bench migrate` reproduces the three roles
 # out of the box. "Cliente Portal" is restricted per-client via a User
 # Permission on Customer (Setup -> User Permissions) - it then only ever
 # sees/edits the Achado De Inspecao rows for its own Customer.
+#
+# "Gestor de Acessos de Cliente" has no doctype permissions of its own - it
+# only grants access to the "Criar Acesso de Cliente" page, whose whitelisted
+# method (manutencao_preditiva.api.criar_acesso_cliente) does the actual User
+# / User Permission writes with ignore_permissions=True. That way a
+# non-technical admin can onboard client logins without ever needing direct
+# access to Setup > User List / User Permissions.
 
 fixtures = [
 	{
 		"dt": "Role",
-		"filters": [["name", "in", ["Tecnico de Inspecao", "Cliente Portal"]]],
+		"filters": [
+			["name", "in", ["Tecnico de Inspecao", "Cliente Portal", "Gestor de Acessos de Cliente"]]
+		],
 	},
 ]
 

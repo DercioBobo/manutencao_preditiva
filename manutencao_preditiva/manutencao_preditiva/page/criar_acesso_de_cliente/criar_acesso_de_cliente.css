@@ -1,0 +1,135 @@
+.cac {
+	--cac-ink: #1c2b36;
+	--cac-muted: #6b7680;
+	--cac-line: #e3e8eb;
+	--cac-surface: #ffffff;
+	--cac-surface-2: #f7f9fa;
+	--cac-accent: #14877e;
+	--cac-radius: 12px;
+	--cac-shadow: 0 1px 2px rgba(20, 30, 38, 0.05), 0 4px 14px rgba(20, 30, 38, 0.04);
+
+	max-width: 560px;
+	margin: 0 auto;
+	padding: 4px 4px 80px;
+	color: var(--cac-ink);
+	font-size: 13px;
+}
+
+.cac * {
+	box-sizing: border-box;
+}
+
+.cac-intro {
+	color: var(--cac-muted);
+	font-size: 13px;
+	margin-bottom: 18px;
+}
+
+.cac-card {
+	background: var(--cac-surface);
+	border: 1px solid var(--cac-line);
+	border-radius: var(--cac-radius);
+	box-shadow: var(--cac-shadow);
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.cac-field {
+	width: 100%;
+}
+
+.cac-field-check {
+	margin-top: 2px;
+}
+
+.cac-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	border: 1px solid var(--cac-line);
+	border-radius: 8px;
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	background: var(--cac-surface);
+	color: var(--cac-ink);
+	transition: all 0.12s ease;
+}
+
+.cac-btn:hover {
+	background: var(--cac-surface-2);
+}
+
+.cac-btn-primary {
+	background: var(--cac-accent);
+	border-color: var(--cac-accent);
+	color: #fff;
+	align-self: flex-start;
+}
+
+.cac-btn-primary:hover {
+	background: #0f6b63;
+}
+
+/* ---- result panel ------------------------------------------------------- */
+
+.cac-result {
+	margin-top: 18px;
+	background: var(--cac-surface-2);
+	border: 1px solid var(--cac-line);
+	border-radius: var(--cac-radius);
+	padding: 18px 20px;
+}
+
+.cac-result-title {
+	font-weight: 700;
+	font-size: 14px;
+	color: var(--cac-accent);
+	margin-bottom: 8px;
+}
+
+.cac-result-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	color: var(--cac-muted);
+	font-size: 12px;
+	margin-bottom: 10px;
+}
+
+.cac-result-note {
+	font-size: 12px;
+	color: var(--cac-muted);
+	margin-bottom: 10px;
+}
+
+.cac-link-row {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 14px;
+}
+
+.cac-link-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 7px 10px;
+	font-size: 12px;
+	border: 1px solid var(--cac-line);
+	border-radius: 8px;
+	background: var(--cac-surface);
+	color: var(--cac-ink);
+}
+
+.cac-link-again {
+	display: block;
+}
+
+@media (max-width: 640px) {
+	.cac-link-row {
+		flex-direction: column;
+	}
+}
