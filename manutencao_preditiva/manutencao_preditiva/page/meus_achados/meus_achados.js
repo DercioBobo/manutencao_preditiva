@@ -67,9 +67,15 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.entries = [];
 		this.offset = 0;
 		this.has_more = false;
+		// Achados tab (cards + table): finding/editing a specific record.
 		this.active_estado = "all";
 		this.severity_filter = "";
 		this.search_term = "";
+
+		// Painel tab: monitoring KPIs - deliberately a SEPARATE filter state,
+		// not tied to whatever the Achados tab happens to be filtered to.
+		this.painel_active_estado = "all";
+		this.painel_severity_filter = "";
 
 		this.table_rows = null;
 		this.table_sort = { field: "creation", dir: "desc" };
@@ -97,7 +103,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.render_dashboard_shell(this.$tab_painel_content);
 
-		this.render_shared_filters(this.$tab_achados_content);
+		this.render_achados_filters(this.$tab_achados_content);
 		this.render_view_toggle(this.$tab_achados_content);
 
 		this.$card_view = $('<div>').appendTo(this.$tab_achados_content);
@@ -164,6 +170,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	render_dashboard_shell($parent) {
 		this.$dashboard = $('<div class="ma-dashboard">').appendTo($parent);
+		this.render_painel_filters(this.$dashboard);
 		this.$dashboard_filter_note = $('<div class="ma-dashboard-filter-note">').appendTo(this.$dashboard);
 		this.$tiles = $('<div class="ma-tiles">').appendTo(this.$dashboard);
 
@@ -189,12 +196,20 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		return $('<div class="ma-chart-body">').appendTo($card);
 	}
 
-	// The single source of truth for the shared Severidade/Estado filter -
-	// used by the card list, the table, AND the dashboard charts/rankings/
-	// crosstabs/trend (NOT the 4 stat tiles, which stay global - see
-	// load_dashboard). Free-text search is deliberately excluded - it's a
-	// per-record match, not something meaningful to filter/aggregate by.
+	// Drives the dashboard charts/rankings/crosstabs/trend (NOT the 4 stat
+	// tiles, which stay global - see load_dashboard). Deliberately its OWN
+	// filter state, separate from the Achados tab's - Painel is for
+	// monitoring KPIs, Achados is for finding/editing a record, and they
+	// don't need to stay in lockstep.
 	get_dashboard_base_filters() {
+		const filters = {};
+		if (this.painel_severity_filter) filters.severidade = this.painel_severity_filter;
+		if (this.painel_active_estado !== "all") filters.estado_da_accao = this.painel_active_estado;
+		return filters;
+	}
+
+	// Drives the card list + table fetch (Achados tab).
+	get_achados_filters() {
 		const filters = {};
 		if (this.severity_filter) filters.severidade = this.severity_filter;
 		if (this.active_estado !== "all") filters.estado_da_accao = this.active_estado;
@@ -532,13 +547,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	// ---- filters --------------------------------------------------------------
 
-	// Severidade + Estado live here: ONE shared control, always visible
-	// regardless of Cards/Tabela, and they're real server-side filters -
-	// changing either immediately refreshes the card list, the table (if
-	// already loaded), AND the dashboard. This is what makes the graphs
-	// "dynamic by filter" rather than a snapshot that only updates when you
-	// happen to revisit the Painel tab.
-	render_shared_filters($parent) {
+	// Achados tab: Severidade + Estado, always visible regardless of Cards/
+	// Tabela, real server-side filters for finding/editing records. Kept
+	// deliberately independent from the Painel tab's own filters (below) -
+	// see the constructor comment for why.
+	render_achados_filters($parent) {
 		const $bar = $('<div class="ma-shared-filters">').appendTo($parent);
 
 		this.$severity_select = $('<select class="ma-select">').appendTo($bar);
@@ -546,7 +559,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$severity_select));
 		this.$severity_select.on("change", () => {
 			this.severity_filter = this.$severity_select.val();
-			this.on_shared_filters_change();
+			this.on_achados_filters_change();
 		});
 
 		this.$chips = $('<div class="ma-chips">').appendTo($bar);
@@ -560,15 +573,42 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				this.active_estado = key;
 				this.$chips.find(".ma-chip").removeClass("active");
 				$chip.addClass("active");
-				this.on_shared_filters_change();
+				this.on_achados_filters_change();
 			});
 		});
 	}
 
-	on_shared_filters_change() {
+	on_achados_filters_change() {
 		this.load_entries();
 		if (this.table_rows) this.load_table_data();
-		this.load_dashboard();
+	}
+
+	// Painel tab: its own Severidade + Estado, driving only the dashboard.
+	render_painel_filters($parent) {
+		const $bar = $('<div class="ma-shared-filters">').appendTo($parent);
+
+		this.$painel_severity_select = $('<select class="ma-select">').appendTo($bar);
+		$(`<option value="">${__("Todas as severidades")}</option>`).appendTo(this.$painel_severity_select);
+		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$painel_severity_select));
+		this.$painel_severity_select.on("change", () => {
+			this.painel_severity_filter = this.$painel_severity_select.val();
+			this.load_dashboard();
+		});
+
+		this.$painel_chips = $('<div class="ma-chips">').appendTo($bar);
+		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
+		chip_defs.forEach(([key, label]) => {
+			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
+				this.$painel_chips
+			);
+			if (key === "all") $chip.addClass("active");
+			$chip.on("click", () => {
+				this.painel_active_estado = key;
+				this.$painel_chips.find(".ma-chip").removeClass("active");
+				$chip.addClass("active");
+				this.load_dashboard();
+			});
+		});
 	}
 
 	// Card-view-only: free-text, client-side narrowing of whatever's already
@@ -655,7 +695,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	load_entries(append) {
 		if (!append) this.offset = 0;
 
-		const filters = this.get_dashboard_base_filters();
+		const filters = this.get_achados_filters();
 
 		this.$load_more_btn.prop("disabled", true).text(__("A carregar..."));
 
@@ -757,7 +797,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	load_table_data() {
 		this.$table_view.html(`<div class="ma-empty">${__("A carregar...")}</div>`);
 
-		const filters = this.get_dashboard_base_filters();
+		const filters = this.get_achados_filters();
 
 		frappe
 			.call({
