@@ -130,27 +130,26 @@ manutencao_preditiva.CriarAcessoDeCliente = class CriarAcessoDeCliente {
 		$(`<span>${__("Email")}: <b>${frappe.utils.escape_html(result.email)}</b></span>`).appendTo($meta);
 		$(`<span>${__("Cliente")}: <b>${frappe.utils.escape_html(customer)}</b></span>`).appendTo($meta);
 
-		if (result.email_sent) {
+		if (result.password) {
 			$(`<p class="cac-result-note">${__(
-				"Foi enviado um email ao cliente com o link para definir a password. Se não chegar (por exemplo, se o envio de email não estiver configurado no servidor), usa o link abaixo."
+				"Conta pronta a usar já com esta password - podes partilhar o email e a password diretamente com o cliente (WhatsApp, telefone, etc.), sem depender do envio de email."
+			)}</p>`).appendTo(this.$result);
+			this.build_copy_row(__("Password"), result.password, this.$result);
+
+			$(`<p class="cac-result-note">${__(
+				"Em alternativa, o cliente pode definir a própria password através deste link:"
+			)}</p>`).appendTo(this.$result);
+		} else if (result.email_sent) {
+			$(`<p class="cac-result-note">${__(
+				"Esta conta já existia - foi enviado um email ao cliente com o link para definir/repor a password. Se não chegar (por exemplo, se o envio de email não estiver configurado no servidor), usa o link abaixo."
 			)}</p>`).appendTo(this.$result);
 		} else {
-			$(`<p class="cac-result-note">${__("Envia este link ao cliente para ele definir a sua password:")}</p>`).appendTo(
-				this.$result
-			);
+			$(`<p class="cac-result-note">${__(
+				"Esta conta já existia - a password atual não foi alterada. Envia este link ao cliente se ele precisar de a repor:"
+			)}</p>`).appendTo(this.$result);
 		}
 
-		const $link_row = $('<div class="cac-link-row">').appendTo(this.$result);
-		const $link_input = $('<input type="text" readonly class="cac-link-input">').val(result.link).appendTo($link_row);
-		const $copy_btn = $(`<button class="cac-btn">${__("Copiar Link")}</button>`).appendTo($link_row);
-
-		$copy_btn.on("click", () => {
-			$link_input.select();
-			navigator.clipboard
-				?.writeText(result.link)
-				.then(() => frappe.show_alert({ message: __("Link copiado"), indicator: "green" }))
-				.catch(() => document.execCommand("copy"));
-		});
+		this.build_copy_row(__("Link"), result.link, this.$result);
 
 		const $again_btn = $(`<button class="cac-btn cac-link-again">${__("Criar outro acesso")}</button>`).appendTo(
 			this.$result
@@ -164,5 +163,20 @@ manutencao_preditiva.CriarAcessoDeCliente = class CriarAcessoDeCliente {
 		});
 
 		this.$result[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
+	}
+
+	build_copy_row(label, value, $parent) {
+		const $row = $('<div class="cac-link-row">').appendTo($parent);
+		$(`<span class="cac-copy-label">${frappe.utils.escape_html(label)}</span>`).appendTo($row);
+		const $input = $('<input type="text" readonly class="cac-link-input">').val(value).appendTo($row);
+		const $copy_btn = $(`<button class="cac-btn">${__("Copiar")}</button>`).appendTo($row);
+
+		$copy_btn.on("click", () => {
+			$input.select();
+			navigator.clipboard
+				?.writeText(value)
+				.then(() => frappe.show_alert({ message: __("Copiado"), indicator: "green" }))
+				.catch(() => document.execCommand("copy"));
+		});
 	}
 };

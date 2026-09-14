@@ -109,8 +109,17 @@
 
 .cac-link-row {
 	display: flex;
+	align-items: center;
 	gap: 8px;
 	margin-bottom: 14px;
+}
+
+.cac-copy-label {
+	flex: 0 0 auto;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--cac-muted);
+	min-width: 60px;
 }
 
 .cac-link-input {

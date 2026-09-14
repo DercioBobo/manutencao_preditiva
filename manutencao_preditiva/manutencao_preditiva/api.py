@@ -1,9 +1,12 @@
 # Copyright (c) 2026, Dércio Bobo and contributors
 # For license information, please see license.txt
 
+import secrets
+
 import frappe
 from frappe import _
 from frappe.utils import cint, get_url, validate_email_address
+from frappe.utils.password import update_password
 
 ACCESS_MANAGER_ROLES = ("System Manager", "Gestor de Acessos de Cliente")
 
@@ -14,15 +17,42 @@ ACCESS_MANAGER_ROLES = ("System Manager", "Gestor de Acessos de Cliente")
 # rather than merged.
 INTERNAL_ROLES = ("System Manager", "Tecnico de Inspecao")
 
+# No 0/O/1/l/I - a temp password that's read aloud or copied off a phone
+# screen shouldn't hinge on telling those apart.
+_PWD_LOWER = "abcdefghjkmnpqrstuvwxyz"
+_PWD_UPPER = _PWD_LOWER.upper()
+_PWD_DIGITS = "23456789"
+_PWD_SYMBOLS = "!@#$%*?"
+
+
+def _generate_temp_password(length=12):
+	rand = secrets.SystemRandom()
+	required = [
+		rand.choice(_PWD_LOWER),
+		rand.choice(_PWD_UPPER),
+		rand.choice(_PWD_DIGITS),
+		rand.choice(_PWD_SYMBOLS),
+	]
+	pool = _PWD_LOWER + _PWD_UPPER + _PWD_DIGITS
+	required += [rand.choice(pool) for _ in range(length - len(required))]
+	rand.shuffle(required)
+	return "".join(required)
+
 
 @frappe.whitelist()
 def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 	"""Provision (or extend) Cliente Portal access for one Customer in a
 	single call: creates the User if needed (role = Cliente Portal only),
-	adds the User Permission that scopes them to that Customer, and returns
-	a set-password link - so a non-technical admin doesn't have to visit
-	the User and User Permission screens separately, and can't leave the
-	portal unscoped by forgetting the permission step.
+	adds the User Permission that scopes them to that Customer, sets a
+	ready-to-use temporary password on a brand new account, and returns a
+	set-password link too - so a non-technical admin doesn't have to visit
+	the User and User Permission screens separately, can't leave the portal
+	unscoped by forgetting the permission step, and can hand the client
+	working credentials immediately instead of depending on outgoing email.
+
+	The temp password is only generated for a brand new account - reusing
+	this call to add an existing Cliente Portal user to another Customer
+	must not silently invalidate a password they're already using.
 
 	Restricted to System Manager / Gestor de Acessos de Cliente; the writes
 	below run with ignore_permissions=True so that role needs no direct
@@ -44,6 +74,7 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 		frappe.throw(_("O cliente {0} não existe.").format(customer))
 
 	created_user = not frappe.db.exists("User", email)
+	temp_password = None
 
 	if created_user:
 		first_name, _sep, last_name = full_name.partition(" ")
@@ -60,6 +91,9 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 		)
 		user.flags.ignore_permissions = True
 		user.insert()
+
+		temp_password = _generate_temp_password()
+		update_password(email, temp_password)
 	else:
 		user = frappe.get_doc("User", email)
 		existing_roles = {r.role for r in user.roles}
@@ -100,6 +134,7 @@ def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
 	return {
 		"created_user": created_user,
 		"email": email,
+		"password": temp_password,
 		"link": get_url(relative_link),
 		"email_sent": bool(send_welcome),
 	}
