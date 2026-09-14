@@ -145,6 +145,10 @@
 
 /* ---- crosstab: área/equipamento × severidade -------------------------------- */
 
+.ma-crosstab-scroll {
+	overflow-x: auto;
+}
+
 .ma-crosstab {
 	width: 100%;
 	border-collapse: collapse;
@@ -172,7 +176,7 @@
 	font-weight: 600;
 	color: var(--ma-ink);
 	white-space: nowrap;
-	max-width: 140px;
+	max-width: 260px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }

@@ -76,17 +76,21 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.refresh_list();
 
 		this.render_table_shell();
+
+		// Table first, cards second - switch_view() is the single source of
+		// truth for initial visibility/active-state too, so there's no
+		// separate "default state" to keep in sync with the toggle logic.
+		this.switch_view("table");
 	}
 
 	// ---- view toggle: cards / table -----------------------------------------
 
 	render_view_toggle() {
 		const $toggle = $('<div class="rra-view-toggle">').appendTo(this.$container);
-		this.$view_cards_btn = $(`<button class="rra-view-btn active">${__("Cartões")}</button>`).appendTo($toggle);
 		this.$view_table_btn = $(`<button class="rra-view-btn">${__("Tabela")}</button>`).appendTo($toggle);
+		this.$view_cards_btn = $(`<button class="rra-view-btn">${__("Cartões")}</button>`).appendTo($toggle);
 		this.$view_cards_btn.on("click", () => this.switch_view("cards"));
 		this.$view_table_btn.on("click", () => this.switch_view("table"));
-		this.view_mode = "cards";
 	}
 
 	switch_view(mode) {

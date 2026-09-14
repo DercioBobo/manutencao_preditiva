@@ -108,17 +108,21 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.$load_more_btn.on("click", () => this.load_entries(true));
 
 		this.render_table_shell(this.$tab_achados_content);
+
+		// Table first, cards second - switch_view() is the single source of
+		// truth for initial visibility/active-state too, so there's no
+		// separate "default state" to keep in sync with the toggle logic.
+		this.switch_view("table");
 	}
 
 	// ---- view toggle: cards / table -----------------------------------------
 
 	render_view_toggle($parent) {
 		const $toggle = $('<div class="ma-view-toggle">').appendTo($parent);
-		this.$view_cards_btn = $(`<button class="ma-view-btn active">${__("Cartões")}</button>`).appendTo($toggle);
 		this.$view_table_btn = $(`<button class="ma-view-btn">${__("Tabela")}</button>`).appendTo($toggle);
+		this.$view_cards_btn = $(`<button class="ma-view-btn">${__("Cartões")}</button>`).appendTo($toggle);
 		this.$view_cards_btn.on("click", () => this.switch_view("cards"));
 		this.$view_table_btn.on("click", () => this.switch_view("table"));
-		this.view_mode = "cards";
 	}
 
 	switch_view(mode) {
@@ -170,9 +174,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.$rank_areas = this.make_chart_card($rankings_row, __("Áreas com Mais Achados"));
 		this.$rank_equipamentos = this.make_chart_card($rankings_row, __("Equipamentos com Mais Achados"));
 
-		const $crosstab_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
-		this.$crosstab_areas = this.make_chart_card($crosstab_row, __("Área × Severidade"));
-		this.$crosstab_equipamentos = this.make_chart_card($crosstab_row, __("Equipamento × Severidade"));
+		// Full-width and stacked, not side-by-side: 7 columns (label + 5
+		// severidades + total) don't fit comfortably in a half-width card.
+		this.$crosstab_areas = this.make_chart_card(this.$dashboard, __("Área × Severidade"));
+		this.$crosstab_equipamentos = this.make_chart_card(this.$dashboard, __("Equipamento × Severidade"));
 
 		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Campanha (Inspeção)"));
 	}
@@ -466,7 +471,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			.sort((a, b) => totals_by_dim[b] - totals_by_dim[a])
 			.slice(0, 8);
 
-		const $table = $('<table class="ma-crosstab">').appendTo($body);
+		const $scroll = $('<div class="ma-crosstab-scroll">').appendTo($body);
+		const $table = $('<table class="ma-crosstab">').appendTo($scroll);
 		const $thead_row = $("<tr>").appendTo($("<thead>").appendTo($table));
 		$("<th>").appendTo($thead_row);
 		MA_SEVERIDADE_OPTIONS.forEach((sev) => $("<th>").text(sev).appendTo($thead_row));
