@@ -76,6 +76,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		// not tied to whatever the Achados tab happens to be filtered to.
 		this.painel_active_estado = "all";
 		this.painel_severity_filter = "";
+		this.painel_area_filter = "";
+		this.painel_equipamento_filter = "";
+		this.painel_date_from = "";
+		this.painel_date_to = "";
 
 		this.table_rows = null;
 		this.table_sort = { field: "creation", dir: "desc" };
@@ -205,6 +209,35 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		const filters = {};
 		if (this.painel_severity_filter) filters.severidade = this.painel_severity_filter;
 		if (this.painel_active_estado !== "all") filters.estado_da_accao = this.painel_active_estado;
+		if (this.painel_area_filter) filters.area_planta = this.painel_area_filter;
+		if (this.painel_equipamento_filter) filters.equipamento_referencia = this.painel_equipamento_filter;
+		if (this.painel_date_from && this.painel_date_to) {
+			filters.creation = ["between", [this.painel_date_from, this.painel_date_to + " 23:59:59"]];
+		} else if (this.painel_date_from) {
+			filters.creation = [">=", this.painel_date_from];
+		} else if (this.painel_date_to) {
+			filters.creation = ["<=", this.painel_date_to + " 23:59:59"];
+		}
+		return filters;
+	}
+
+	// List form of the same filters, for the 4 stat tiles specifically: each
+	// tile also has its OWN hardcoded condition (e.g. "Críticos" always
+	// requires severidade=Crítico), and a plain filters *object* can only
+	// hold one value per fieldname - merging two conditions on the same
+	// field would silently overwrite one of them. A filters *list* allows
+	// multiple conditions on the same field, so they correctly AND together
+	// instead (e.g. "Por Resolver" while painel_active_estado="Concluído"
+	// correctly shows 0 - the two conditions are genuinely contradictory,
+	// which is the right answer once you've explicitly picked that filter).
+	get_dashboard_base_filters_list() {
+		const filters = [];
+		if (this.painel_severity_filter) filters.push(["severidade", "=", this.painel_severity_filter]);
+		if (this.painel_active_estado !== "all") filters.push(["estado_da_accao", "=", this.painel_active_estado]);
+		if (this.painel_area_filter) filters.push(["area_planta", "=", this.painel_area_filter]);
+		if (this.painel_equipamento_filter) filters.push(["equipamento_referencia", "=", this.painel_equipamento_filter]);
+		if (this.painel_date_from) filters.push(["creation", ">=", this.painel_date_from]);
+		if (this.painel_date_to) filters.push(["creation", "<=", this.painel_date_to + " 23:59:59"]);
 		return filters;
 	}
 
@@ -221,43 +254,65 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		const parts = [];
 		if (base.severidade) parts.push(`${__("Severidade")}: <b>${frappe.utils.escape_html(base.severidade)}</b>`);
 		if (base.estado_da_accao) parts.push(`${__("Estado")}: <b>${frappe.utils.escape_html(base.estado_da_accao)}</b>`);
+		if (this.painel_date_from || this.painel_date_to) {
+			const from = this.painel_date_from ? frappe.datetime.str_to_user(this.painel_date_from) : "…";
+			const to = this.painel_date_to ? frappe.datetime.str_to_user(this.painel_date_to) : "…";
+			parts.push(`${__("Período")}: <b>${from} – ${to}</b>`);
+		}
 
-		if (!parts.length) {
+		if (!parts.length && !this.painel_area_filter && !this.painel_equipamento_filter) {
 			this.$dashboard_filter_note.html(`<span>${__("A mostrar: todos os achados")}</span>`);
-		} else {
-			this.$dashboard_filter_note.html(`<span>${__("Filtrado por")}: ${parts.join(" · ")}</span>`);
+			return;
+		}
+
+		this.$dashboard_filter_note.html(
+			`${__("Filtrado por")}: <span class="ma-filter-note-parts">${parts.join(" · ")}</span>`
+		);
+		const $parts = this.$dashboard_filter_note.find(".ma-filter-note-parts");
+
+		const add_async_part = (label, code, resolver) => {
+			if ($parts.text().trim()) $parts.append(" · ");
+			$parts.append(`${label}: `);
+			resolver.call(this, code, $("<b>").appendTo($parts));
+		};
+
+		if (this.painel_area_filter) add_async_part(__("Área"), this.painel_area_filter, this.resolve_area_label);
+		if (this.painel_equipamento_filter) {
+			add_async_part(__("Equipamento"), this.painel_equipamento_filter, this.resolve_equipamento_label);
 		}
 	}
 
 	load_dashboard() {
 		this.render_dashboard_filter_note();
 		const base = this.get_dashboard_base_filters();
+		const base_list = this.get_dashboard_base_filters_list();
 
 		Promise.all([
-			// The 4 stat tiles are a stable "health snapshot" - always global,
-			// never zeroed out just because the Achados tab happens to be
-			// filtered to something else right now. Only the charts below
-			// (rankings, crosstabs, trend) are filter-aware.
-			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Achado De Inspecao" } }),
+			// The 4 stat tiles respect the Painel filters too (combined via a
+			// filters LIST, not a plain object - see get_dashboard_base_filters_list
+			// for why that matters once a tile's own hardcoded condition and a
+			// user-picked filter could land on the same field).
+			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Achado De Inspecao", filters: base_list } }),
 			frappe.call({
 				method: "frappe.client.get_count",
 				args: {
 					doctype: "Achado De Inspecao",
-					filters: { estado_da_accao: ["in", ["Pendente", "Em Curso"]] },
+					filters: [...base_list, ["estado_da_accao", "in", ["Pendente", "Em Curso"]]],
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_count",
-				args: { doctype: "Achado De Inspecao", filters: { severidade: "Crítico" } },
+				args: { doctype: "Achado De Inspecao", filters: [...base_list, ["severidade", "=", "Crítico"]] },
 			}),
 			frappe.call({
 				method: "frappe.client.get_count",
 				args: {
 					doctype: "Achado De Inspecao",
-					filters: {
-						prazo: ["<", frappe.datetime.get_today()],
-						estado_da_accao: ["not in", ["Concluído", "Não Aplicável"]],
-					},
+					filters: [
+						...base_list,
+						["prazo", "<", frappe.datetime.get_today()],
+						["estado_da_accao", "not in", ["Concluído", "Não Aplicável"]],
+					],
 				},
 			}),
 			frappe.call({
@@ -585,9 +640,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	// Painel tab: its own Severidade + Estado, driving only the dashboard.
 	render_painel_filters($parent) {
-		const $bar = $('<div class="ma-shared-filters">').appendTo($parent);
+		const $outer = $('<div class="ma-shared-filters ma-shared-filters-stacked">').appendTo($parent);
+		const $row1 = $('<div class="ma-shared-filters-row">').appendTo($outer);
+		const $row2 = $('<div class="ma-shared-filters-row">').appendTo($outer);
 
-		this.$painel_severity_select = $('<select class="ma-select">').appendTo($bar);
+		this.$painel_severity_select = $('<select class="ma-select">').appendTo($row1);
 		$(`<option value="">${__("Todas as severidades")}</option>`).appendTo(this.$painel_severity_select);
 		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$painel_severity_select));
 		this.$painel_severity_select.on("change", () => {
@@ -595,7 +652,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			this.load_dashboard();
 		});
 
-		this.$painel_chips = $('<div class="ma-chips">').appendTo($bar);
+		this.$painel_chips = $('<div class="ma-chips">').appendTo($row1);
 		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
@@ -609,6 +666,78 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				this.load_dashboard();
 			});
 		});
+
+		const $clear_btn = $(`<button class="ma-btn">${__("Limpar Filtros")}</button>`).appendTo($row1);
+		$clear_btn.on("click", () => this.clear_painel_filters());
+
+		const $area_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
+		this.painel_area_control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Link",
+				fieldname: "painel_area",
+				label: __("Área"),
+				options: "Area De Inspecao",
+				onchange: () => {
+					this.painel_area_filter = this.painel_area_control.get_value();
+					this.load_dashboard();
+				},
+			},
+			parent: $area_wrap[0],
+			render_input: true,
+		});
+		this.painel_area_control.refresh();
+
+		const $equip_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
+		this.painel_equipamento_control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Link",
+				fieldname: "painel_equipamento",
+				label: __("Equipamento"),
+				options: "Equipamento De Inspecao",
+				onchange: () => {
+					this.painel_equipamento_filter = this.painel_equipamento_control.get_value();
+					this.load_dashboard();
+				},
+			},
+			parent: $equip_wrap[0],
+			render_input: true,
+		});
+		this.painel_equipamento_control.refresh();
+
+		const $date_from_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
+		$('<label class="ma-painel-filter-label">').text(__("De")).appendTo($date_from_wrap);
+		this.$painel_date_from = $('<input type="date" class="ma-select">').appendTo($date_from_wrap);
+		this.$painel_date_from.on("change", () => {
+			this.painel_date_from = this.$painel_date_from.val();
+			this.load_dashboard();
+		});
+
+		const $date_to_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
+		$('<label class="ma-painel-filter-label">').text(__("Até")).appendTo($date_to_wrap);
+		this.$painel_date_to = $('<input type="date" class="ma-select">').appendTo($date_to_wrap);
+		this.$painel_date_to.on("change", () => {
+			this.painel_date_to = this.$painel_date_to.val();
+			this.load_dashboard();
+		});
+	}
+
+	clear_painel_filters() {
+		this.painel_severity_filter = "";
+		this.painel_active_estado = "all";
+		this.painel_area_filter = "";
+		this.painel_equipamento_filter = "";
+		this.painel_date_from = "";
+		this.painel_date_to = "";
+
+		this.$painel_severity_select.val("");
+		this.$painel_chips.find(".ma-chip").removeClass("active");
+		this.$painel_chips.find('[data-key="all"]').addClass("active");
+		this.painel_area_control.set_value("");
+		this.painel_equipamento_control.set_value("");
+		this.$painel_date_from.val("");
+		this.$painel_date_to.val("");
+
+		this.load_dashboard();
 	}
 
 	// Card-view-only: free-text, client-side narrowing of whatever's already
