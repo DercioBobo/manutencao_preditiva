@@ -1,0 +1,21 @@
+/* Login page skin - scoped to .for-login (Frappe's login page wrapper) only,
+   so it can never bleed into other website pages. Purely a hooks.py-driven
+   web_include_css asset: nothing here touches Website Settings or any other
+   DB record, so uninstalling this app removes the include and the login
+   page reverts to stock Frappe automatically. */
+
+.for-login {
+	background: linear-gradient(160deg, #0f6b63 0%, #14877e 45%, #1c2b36 100%);
+	min-height: 100vh;
+}
+
+.for-login .login-content.page-card {
+	border: none;
+	border-top: 4px solid #14877e;
+	border-radius: 16px;
+	box-shadow: 0 20px 60px rgba(15, 34, 40, 0.35);
+}
+
+.for-login .sign-up-message {
+	display: none;
+}

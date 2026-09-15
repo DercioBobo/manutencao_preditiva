@@ -20,6 +20,14 @@ required_apps = ["erpnext"]
 # link to it) - see manutencao_preditiva/public/js/cliente_portal_redirect.js.
 app_include_js = ["/assets/manutencao_preditiva/js/cliente_portal_redirect.js"]
 
+# web_include_* apply to every website page (not just /login), but the
+# login theme's own CSS/JS are scoped to the .for-login wrapper so they
+# no-op everywhere else. Deliberately not a Website Settings change - this
+# is pure app-owned hooks + static assets, so uninstalling the app removes
+# the include and the login page reverts to stock Frappe automatically.
+web_include_css = ["/assets/manutencao_preditiva/css/login_theme.css"]
+web_include_js = ["/assets/manutencao_preditiva/js/login_theme.js"]
+
 # Fixtures
 # --------
 # Exported so `bench get-app` + `bench migrate` reproduces the three roles
