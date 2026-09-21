@@ -8,4 +8,5 @@ __pycache__/
 # and IS committed - it's already de-identified into plain field values).
 *.xlsx
 *.xls
+*.pdf
 /achados.json

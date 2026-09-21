@@ -4,3 +4,4 @@
 manutencao_preditiva.patches.normalizar_area_planta
 manutencao_preditiva.patches.normalizar_equipamento_referencia
 manutencao_preditiva.patches.arredondar_temperaturas_termografia
+manutencao_preditiva.patches.seed_vibration_alarm_settings

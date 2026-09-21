@@ -1,0 +1,284 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "report",
+  "customer",
+  "area",
+  "report_date",
+  "cb_1",
+  "equipment",
+  "equipment_description",
+  "power_kw",
+  "tolerance_percent",
+  "sb_readings",
+  "readings",
+  "previous_sheet",
+  "sb_diagnosis",
+  "suggested_severity",
+  "severity",
+  "defects",
+  "cb_2",
+  "recommendations",
+  "follow_up",
+  "sb_images",
+  "images",
+  "sb_response",
+  "client_response",
+  "responsible",
+  "cb_response",
+  "due_date",
+  "action_status",
+  "completion_date"
+ ],
+ "fields": [
+  {
+   "fieldname": "report",
+   "fieldtype": "Link",
+   "label": "Report",
+   "options": "Inspection Report",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1,
+   "in_standard_filter": 1,
+   "fetch_from": "report.customer"
+  },
+  {
+   "fieldname": "area",
+   "fieldtype": "Link",
+   "label": "Area / Plant",
+   "options": "Inspection Area",
+   "read_only": 1,
+   "in_standard_filter": 1,
+   "fetch_from": "report.area"
+  },
+  {
+   "fieldname": "report_date",
+   "fieldtype": "Date",
+   "label": "Report Date",
+   "read_only": 1,
+   "fetch_from": "report.report_date"
+  },
+  {
+   "fieldname": "cb_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "equipment",
+   "fieldtype": "Link",
+   "label": "Equipment",
+   "options": "Inspection Equipment",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "equipment_description",
+   "fieldtype": "Data",
+   "label": "Description",
+   "read_only": 1,
+   "fetch_from": "equipment.description"
+  },
+  {
+   "fieldname": "power_kw",
+   "fieldtype": "Float",
+   "label": "Rated Power (kW)",
+   "read_only": 1,
+   "fetch_from": "equipment.power_kw"
+  },
+  {
+   "fieldname": "tolerance_percent",
+   "fieldtype": "Percent",
+   "label": "Tolerance (%)",
+   "default": "0",
+   "description": "Raises every alarm limit for this equipment. Capped by Vibration Alarm Settings."
+  },
+  {
+   "fieldname": "sb_readings",
+   "fieldtype": "Section Break",
+   "label": "Readings"
+  },
+  {
+   "fieldname": "readings",
+   "fieldtype": "Table",
+   "label": "Readings",
+   "options": "Vibration Reading"
+  },
+  {
+   "fieldname": "previous_sheet",
+   "fieldtype": "Link",
+   "label": "Compared with",
+   "options": "Equipment Inspection",
+   "read_only": 1,
+   "description": "The equipment's previous sheet - its readings fill the Prev. columns."
+  },
+  {
+   "fieldname": "sb_diagnosis",
+   "fieldtype": "Section Break",
+   "label": "Diagnosis"
+  },
+  {
+   "fieldname": "suggested_severity",
+   "fieldtype": "Select",
+   "label": "Suggested Severity",
+   "options": "\nNormal\nAcceptable\nAlarm\nCritical\nNot Collected",
+   "read_only": 1,
+   "description": "Worst severity of the readings against the alarm tables. Only a suggestion."
+  },
+  {
+   "fieldname": "severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "\nNormal\nAcceptable\nAlarm\nCritical\nNot Collected",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Follows the suggestion until you set it yourself - e.g. when the spectrum shows bearing defects."
+  },
+  {
+   "fieldname": "defects",
+   "fieldtype": "Small Text",
+   "label": "Defects Found"
+  },
+  {
+   "fieldname": "cb_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "recommendations",
+   "fieldtype": "Small Text",
+   "label": "Recommendations"
+  },
+  {
+   "fieldname": "follow_up",
+   "fieldtype": "Small Text",
+   "label": "Actions Taken / Follow-up"
+  },
+  {
+   "fieldname": "sb_images",
+   "fieldtype": "Section Break",
+   "label": "Images",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "images",
+   "fieldtype": "Table",
+   "label": "Images",
+   "options": "Equipment Inspection Image"
+  },
+  {
+   "fieldname": "sb_response",
+   "fieldtype": "Section Break",
+   "label": "Client Response"
+  },
+  {
+   "fieldname": "client_response",
+   "fieldtype": "Small Text",
+   "label": "Action Taken / Client Response",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "responsible",
+   "fieldtype": "Data",
+   "label": "Responsible",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "cb_response",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "label": "Due Date",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "action_status",
+   "fieldtype": "Select",
+   "label": "Action Status",
+   "permlevel": 1,
+   "options": "Open\nIn Progress\nDone\nNot Applicable",
+   "default": "Open",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "completion_date",
+   "fieldtype": "Date",
+   "label": "Completion Date",
+   "permlevel": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Equipment Inspection",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "Tecnico de Inspecao",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "Tecnico de Inspecao",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "Cliente Portal",
+   "permlevel": 0,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "Cliente Portal",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "format:EI-{YYYY}-{#####}",
+ "naming_rule": "Expression",
+ "track_changes": 1,
+ "search_fields": "equipment,report,customer"
+}

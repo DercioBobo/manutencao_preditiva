@@ -10,6 +10,55 @@ bench get-app manutencao_preditiva <repo-url>
 bench --site <site> install-app manutencao_preditiva
 ```
 
+## Inspection reports (vibration)
+
+The source of truth is the **report** the team writes for each client and
+month - severity legend, alarm tables, a summary of the area, and one sheet
+per equipment with the readings, previous-month comparison, diagnosis and
+photos. The Excel "Action Tracker" is only a summary of it, so the app now
+models the report itself and produces the Excel from it.
+
+**Workflow**
+
+1. Once: set up the client's **Inspection Area** and **Inspection Equipment**
+   (rated power in kW, and its measurement points - `M1H`, `M2H`, `M2A`, ...).
+2. Per month: create an **Inspection Report** (customer, area, date, team),
+   then *Create Equipment Sheets* - one **Equipment Inspection** per active
+   equipment, already carrying its measurement points and, next to them, last
+   month's readings.
+3. The technician types velocity (mm/s), acceleration (g's) and temperature
+   per point. The sheet grades every reading against the alarm tables and
+   **suggests** a severity; the analyst confirms or overrides it (bearing
+   defects can make an equipment worse than its raw numbers) and adds the
+   defects, recommendations and images.
+4. Set the report to **Issued**. The *Vibration Report* print format renders
+   the full PDF - the counts, percentages and pie are computed from the
+   sheets - and the client can now see it.
+5. **Action Tracker** (report) lists the sheets with the client's response
+   columns; *Export > Excel* gives the summary file.
+
+**Alarm tables** live in *Vibration Alarm Settings* (seeded with the limits of
+the current report, FR.TEC.09) and are shared by every client. Velocity limits
+depend on the motor's power band; acceleration has a single set; a reading that
+reaches a limit is at that severity and below the first limit is Normal. An
+equipment can carry a tolerance up to the maximum set there (10%).
+
+**Severity levels:** Normal, Acceptable, Alarm, Critical, Not Collected.
+
+Clients (role *Cliente Portal*) only see a report, and its sheets, once it is
+Issued, and can only write the *Client Response* fields.
+
+The severity rules are plain Python in `manutencao_preditiva/vibration.py`;
+their tests need no bench:
+
+```bash
+python -m unittest manutencao_preditiva.tests.test_vibration
+```
+
+The Portuguese modules below (Campanha / Achado / Área / Equipamento,
+Registo Rápido, Meus Achados) are the earlier, summary-level model and are
+being superseded by the above.
+
 ## Módulos
 
 - **Campanha De Inspecao** — cabeçalho de uma ronda de inspeção a um cliente

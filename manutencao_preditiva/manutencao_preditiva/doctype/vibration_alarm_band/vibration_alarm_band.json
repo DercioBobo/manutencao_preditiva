@@ -1,0 +1,59 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "max_power_kw",
+  "acceptable_mm_s",
+  "alarm_mm_s",
+  "critical_mm_s"
+ ],
+ "fields": [
+  {
+   "fieldname": "max_power_kw",
+   "fieldtype": "Float",
+   "label": "Up to Power (kW)",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "acceptable_mm_s",
+   "fieldtype": "Float",
+   "label": "Acceptable from (mm/s)",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "alarm_mm_s",
+   "fieldtype": "Float",
+   "label": "Alarm from (mm/s)",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "critical_mm_s",
+   "fieldtype": "Float",
+   "label": "Critical from (mm/s)",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Vibration Alarm Band",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

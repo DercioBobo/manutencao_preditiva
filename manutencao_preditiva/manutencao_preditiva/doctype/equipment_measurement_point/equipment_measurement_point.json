@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "point_code",
+  "point_description"
+ ],
+ "fields": [
+  {
+   "fieldname": "point_code",
+   "fieldtype": "Data",
+   "label": "Point",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "description": "Code used on the report, e.g. M1H, M2H, M2A, G1H"
+  },
+  {
+   "fieldname": "point_description",
+   "fieldtype": "Data",
+   "label": "Description",
+   "in_list_view": 1,
+   "columns": 6,
+   "description": "e.g. Motor, drive end, horizontal"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Equipment Measurement Point",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

@@ -51,6 +51,25 @@ fixtures = [
 	},
 ]
 
+# Installation
+# ------------
+# Patches don't run on a fresh install, so the default alarm limits are
+# seeded here too (and by a patch on sites that already had the app).
+after_install = "manutencao_preditiva.setup.install.after_install"
+
+# Permissions
+# -----------
+# Clients (Cliente Portal) only see a report - and its sheets - once it is
+# Issued; drafts stay internal. Staff roles are unaffected.
+permission_query_conditions = {
+	"Inspection Report": "manutencao_preditiva.permissions.report_query_conditions",
+	"Equipment Inspection": "manutencao_preditiva.permissions.sheet_query_conditions",
+}
+has_permission = {
+	"Inspection Report": "manutencao_preditiva.permissions.report_has_permission",
+	"Equipment Inspection": "manutencao_preditiva.permissions.sheet_has_permission",
+}
+
 # Document Events
 # ---------------
 # Add per-doctype once doctypes exist (doc_events = {...}).

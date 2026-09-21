@@ -1,0 +1,133 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "area",
+  "cb_1",
+  "machine",
+  "description",
+  "sb_technical",
+  "power_kw",
+  "disabled",
+  "sb_points",
+  "points"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "area",
+   "fieldtype": "Link",
+   "label": "Area / Plant",
+   "options": "Inspection Area",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "cb_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "machine",
+   "fieldtype": "Data",
+   "label": "Machine / Unit",
+   "in_list_view": 1,
+   "description": "e.g. Pastorizadora"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "label": "Description",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "e.g. Bomba 2 segundo banho quente"
+  },
+  {
+   "fieldname": "sb_technical",
+   "fieldtype": "Section Break",
+   "label": "Technical data"
+  },
+  {
+   "fieldname": "power_kw",
+   "fieldtype": "Float",
+   "label": "Rated Power (kW)",
+   "description": "Selects the velocity alarm band. Required to judge vibration readings."
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "description": "Out of the monitoring programme - no new sheets are created for it."
+  },
+  {
+   "fieldname": "sb_points",
+   "fieldtype": "Section Break",
+   "label": "Measurement points"
+  },
+  {
+   "fieldname": "points",
+   "fieldtype": "Table",
+   "label": "Measurement Points",
+   "options": "Equipment Measurement Point"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Inspection Equipment",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "Tecnico de Inspecao",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "Cliente Portal",
+   "permlevel": 0,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "format:IEQ-{#####}",
+ "naming_rule": "Expression",
+ "title_field": "description",
+ "show_title_field_in_link": 1,
+ "search_fields": "description,machine,customer",
+ "track_changes": 1
+}

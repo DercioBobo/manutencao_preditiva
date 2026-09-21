@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "point",
+  "velocity_mm_s",
+  "previous_velocity_mm_s",
+  "acceleration_g",
+  "previous_acceleration_g",
+  "temperature_c",
+  "previous_temperature_c",
+  "velocity_severity",
+  "acceleration_severity"
+ ],
+ "fields": [
+  {
+   "fieldname": "point",
+   "fieldtype": "Data",
+   "label": "Point",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "velocity_mm_s",
+   "fieldtype": "Float",
+   "label": "mm/s",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "previous_velocity_mm_s",
+   "fieldtype": "Float",
+   "label": "Prev. mm/s",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "acceleration_g",
+   "fieldtype": "Float",
+   "label": "g's",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "previous_acceleration_g",
+   "fieldtype": "Float",
+   "label": "Prev. g's",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "temperature_c",
+   "fieldtype": "Float",
+   "label": "Temp. (°C)",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "previous_temperature_c",
+   "fieldtype": "Float",
+   "label": "Prev. Temp.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "velocity_severity",
+   "fieldtype": "Select",
+   "label": "mm/s Severity",
+   "options": "\nNormal\nAcceptable\nAlarm\nCritical\nNot Collected",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "acceleration_severity",
+   "fieldtype": "Select",
+   "label": "g's Severity",
+   "options": "\nNormal\nAcceptable\nAlarm\nCritical\nNot Collected",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Vibration Reading",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

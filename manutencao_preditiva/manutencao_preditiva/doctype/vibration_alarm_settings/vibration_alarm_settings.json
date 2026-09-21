@@ -1,0 +1,105 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sb_velocity",
+  "velocity_help",
+  "bands",
+  "sb_acceleration",
+  "acceleration_acceptable",
+  "acceleration_alarm",
+  "cb_acceleration",
+  "acceleration_critical",
+  "sb_tolerance",
+  "max_tolerance_percent"
+ ],
+ "fields": [
+  {
+   "fieldname": "sb_velocity",
+   "fieldtype": "Section Break",
+   "label": "Velocity limits (mm/s)"
+  },
+  {
+   "fieldname": "velocity_help",
+   "fieldtype": "HTML",
+   "options": "<p class='text-muted'>The band is picked by the equipment's rated power (the first row whose <b>Up to Power</b> covers it). A reading that reaches a limit is at that severity; below <b>Acceptable</b> the equipment is Normal.</p>"
+  },
+  {
+   "fieldname": "bands",
+   "fieldtype": "Table",
+   "label": "Bands",
+   "options": "Vibration Alarm Band",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sb_acceleration",
+   "fieldtype": "Section Break",
+   "label": "Acceleration limits (g's)"
+  },
+  {
+   "fieldname": "acceleration_acceptable",
+   "fieldtype": "Float",
+   "label": "Acceptable from (g's)",
+   "default": "0.9",
+   "reqd": 1
+  },
+  {
+   "fieldname": "acceleration_alarm",
+   "fieldtype": "Float",
+   "label": "Alarm from (g's)",
+   "default": "1.5",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb_acceleration",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "acceleration_critical",
+   "fieldtype": "Float",
+   "label": "Critical from (g's)",
+   "default": "2.5",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sb_tolerance",
+   "fieldtype": "Section Break",
+   "label": "Tolerance"
+  },
+  {
+   "fieldname": "max_tolerance_percent",
+   "fieldtype": "Percent",
+   "label": "Maximum tolerance (%)",
+   "default": "10",
+   "reqd": 1,
+   "description": "The analyst may raise every limit of an equipment by up to this much, based on experience or the equipment's history."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Vibration Alarm Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "permlevel": 0,
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "Tecnico de Inspecao",
+   "permlevel": 0,
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "issingle": 1
+}

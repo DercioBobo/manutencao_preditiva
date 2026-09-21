@@ -1,0 +1,192 @@
+{
+ "actions": [],
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "technique",
+  "area",
+  "report_date",
+  "period_label",
+  "cb_1",
+  "status",
+  "service_reference",
+  "site_address",
+  "sb_team",
+  "prepared_by",
+  "instrument",
+  "cb_2",
+  "technicians",
+  "sb_summary",
+  "summary_html",
+  "sb_notes",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "technique",
+   "fieldtype": "Select",
+   "label": "Technique",
+   "options": "Vibration",
+   "default": "Vibration",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "area",
+   "fieldtype": "Link",
+   "label": "Area / Plant",
+   "options": "Inspection Area",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "report_date",
+   "fieldtype": "Date",
+   "label": "Report Date",
+   "default": "Today",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "period_label",
+   "fieldtype": "Data",
+   "label": "Period",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cb_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nIssued",
+   "default": "Draft",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Clients only see a report once it is Issued."
+  },
+  {
+   "fieldname": "service_reference",
+   "fieldtype": "Data",
+   "label": "Service / Job No."
+  },
+  {
+   "fieldname": "site_address",
+   "fieldtype": "Data",
+   "label": "Site Address"
+  },
+  {
+   "fieldname": "sb_team",
+   "fieldtype": "Section Break",
+   "label": "Team and instrument"
+  },
+  {
+   "fieldname": "prepared_by",
+   "fieldtype": "Data",
+   "label": "Prepared by"
+  },
+  {
+   "fieldname": "instrument",
+   "fieldtype": "Data",
+   "label": "Instrument",
+   "default": "Vib-Xpert II"
+  },
+  {
+   "fieldname": "cb_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "technicians",
+   "fieldtype": "Small Text",
+   "label": "Technicians",
+   "description": "One per line"
+  },
+  {
+   "fieldname": "sb_summary",
+   "fieldtype": "Section Break",
+   "label": "Severity summary"
+  },
+  {
+   "fieldname": "summary_html",
+   "fieldtype": "HTML"
+  },
+  {
+   "fieldname": "sb_notes",
+   "fieldtype": "Section Break",
+   "label": "Notes",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Observations"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "group": "Sheets",
+   "link_doctype": "Equipment Inspection",
+   "link_fieldname": "report"
+  }
+ ],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "Inspection Report",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "Tecnico de Inspecao",
+   "permlevel": 0,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "Cliente Portal",
+   "permlevel": 0,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "format:IR-{YYYY}-{####}",
+ "naming_rule": "Expression",
+ "track_changes": 1,
+ "search_fields": "customer,area,period_label"
+}
