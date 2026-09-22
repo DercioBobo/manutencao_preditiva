@@ -46,7 +46,10 @@ equipment can carry a tolerance up to the maximum set there (10%).
 **Severity levels:** Normal, Acceptable, Alarm, Critical, Not Collected.
 
 Clients (role *Cliente Portal*) only see a report, and its sheets, once it is
-Issued, and can only write the *Client Response* fields.
+Issued, and can only write the *Client Response* fields. They see it through
+**Meus Achados** (`/app/meus-achados`, unchanged route/UI language - see
+below), which now reads Equipment Inspection / Inspection Report instead of
+the old Achado De Inspecao.
 
 The severity rules are plain Python in `manutencao_preditiva/vibration.py`;
 their tests need no bench:
@@ -55,9 +58,14 @@ their tests need no bench:
 python -m unittest manutencao_preditiva.tests.test_vibration
 ```
 
-The Portuguese modules below (Campanha / Achado / Área / Equipamento,
-Registo Rápido, Meus Achados) are the earlier, summary-level model and are
-being superseded by the above.
+The Portuguese *doctypes* below (Campanha / Achado / Área / Equipamento)
+are the earlier, summary-level model, kept only so the historical data
+imported into them isn't lost until the user removes it - nothing new
+should be written there. Both Portuguese *pages* that used to write to
+them, **Meus Achados** and **Registo Rápido de Achados**, have been ported
+and now read/write Equipment Inspection / Inspection Report instead (see
+their sections further down) - the old doctypes exist without any
+still-active way to reach them through the UI.
 
 ## Módulos
 
@@ -84,26 +92,46 @@ total) e **Cliente Portal** (leitura + resposta apenas).
 
 Página dedicada para o técnico registar achados no campo rapidamente, em
 `/app/registo-rapido-de-achados` (acessível também pela awesomebar, ex.
-`Ctrl+G` → "Registo Rápido de Achados"). Só mostra os campos relevantes
-para criar um achado novo (sem a secção "Resposta do Cliente", que é só
-para o cliente preencher depois).
+`Ctrl+G` → "Registo Rápido de Achados"). **Ported** - lê e escreve Equipment
+Inspection / Inspection Report, não o antigo Achado De Inspecao / Campanha
+De Inspecao. Interface em português, como o Meus Achados (mesma razão - ver
+a secção desse).
 
-- Campanha e Área mantêm-se seleccionadas entre registos — só os campos do
-  achado em si (equipamento, severidade, descrição, …) são limpos depois de
-  guardar, para o técnico encadear vários registos rapidamente.
-- A lista de Campanhas mostra só as que estão "Em Curso"; a Área filtra
-  automaticamente pelo Cliente da campanha seleccionada.
-- Campos de temperatura só aparecem quando a campanha é de Termografia.
-- Área/Campanha novas: basta escrever um nome que não exista no campo -
-  o Link do Frappe pergunta se quer criar (comportamento nativo, sem botão
-  extra), então não é preciso sair da página.
-- Valida campos obrigatórios no browser antes de guardar (com mensagem
-  clara do que falta) e, de qualquer forma, a validação real acontece no
-  servidor via `frappe.client.insert` - o mesmo caminho usado por
-  qualquer outra forma de criar o documento, incluindo as regras do
-  controller (ex.: cálculo da diferença de temperatura).
-- Lista "Achados Recentes desta Campanha" por baixo do formulário, para o
-  técnico confirmar o que já foi registado sem sair da página.
+Mudança de fundo em relação ao antigo fluxo: um Achado deixou de ser um
+registo livre (o técnico podia lançar vários achados separados para o mesmo
+equipamento numa campanha); agora é uma **ficha por equipamento por
+relatório** (Equipment Inspection), com uma tabela de leituras por ponto de
+medição - reflecte a estrutura real do relatório em Word. "Novo Achado"
+aqui cria/abre essa ficha, não uma entrada solta:
+
+- Selecciona-se um **Relatório** (só os que estão em **Draft** aparecem -
+  uma vez **Issued**, a edição passa a ser pela ficha completa). Como a
+  Área agora é fixa por Relatório (não escolhida por achado como antes), um
+  técnico que cubra várias áreas numa visita precisa de um Relatório por
+  área.
+- **Criar Fichas de Equipamento** cria de uma vez uma ficha vazia por cada
+  equipamento activo da área do relatório (reaproveita o mesmo botão que já
+  existe no formulário do Inspection Report). **Novo Achado** cria uma
+  ficha para um único equipamento (útil para um equipamento adicionado a
+  meio da ronda) e abre-a logo para edição - uma ficha vazia sem leituras
+  não serve de nada sozinha.
+- A edição mostra uma tabela simples (não um grid nativo do Frappe, para
+  reduzir risco sem um bench para testar) com um ponto por linha - mm/s,
+  g's, temp. - pré-preenchida com os pontos de medição configurados no
+  Equipamento de Inspeção. A severidade é **sugerida automaticamente** a
+  partir das leituras (`vibration.py`, igual ao resto do sistema) e só é
+  editável através de uma checkbox "Substituir severidade sugerida", para
+  os casos em que o diagnóstico (ex.: defeito de rolamento visto no
+  espectro) é mais grave do que as leituras isoladas indicam.
+- Só permite anexar **uma** imagem nova por sessão de edição (a galeria
+  completa, com legendas, fica reservada ao formulário nativo do Equipment
+  Inspection - um grid de anexos múltiplos dentro de um Dialog à mão tinha
+  risco a mais para testar sem bench).
+- Guarda via `frappe.client.set_value` (não `insert`) depois da ficha
+  criada - a validação real continua a acontecer no controller do
+  Equipment Inspection (cálculo da severidade, das leituras anteriores,
+  etc.), o mesmo caminho usado por qualquer outra forma de editar o
+  documento.
 
 ### Meus Achados (portal do cliente)
 
@@ -112,7 +140,7 @@ com dois separadores:
 
 - **Painel** — cartões com totais (achados, por resolver, críticos, em
   atraso), gráficos de composição por severidade/estado, rankings das áreas
-  e equipamentos com mais achados, e um gráfico de achados por campanha ao
+  e equipamentos com mais achados, e um gráfico de achados por relatório ao
   longo do tempo. Reflecte sempre o histórico completo do cliente, não só a
   página actualmente carregada na lista.
 - **Achados** — pesquisa, filtro por severidade/estado e a lista de achados
@@ -120,6 +148,26 @@ com dois separadores:
   secção de resposta (ação tomada, responsável, prazo, estado, data de
   conclusão) — os únicos campos que este papel pode gravar, reforçado tanto
   na interface como nas permissões (nível 1) do doctype.
+
+Lê Equipment Inspection / Inspection Report (não o antigo Achado De
+Inspecao / Campanha De Inspecao). Um achado só aparece aqui depois do
+respectivo Inspection Report passar a **Issued** — reforçado no servidor
+(`manutencao_preditiva/permissions.py`), não só na query desta página.
+
+A interface mantém-se em português (é o que o cliente já conhece); só o
+que está por trás mudou de nome - severidade e estado são gravados em
+inglês (`Normal`/`Acceptable`/`Alarm`/`Critical`/`Not Collected`,
+`Open`/`In Progress`/`Done`/`Not Applicable`, os mesmos valores do
+Inspection Report), a página só troca o texto mostrado.
+
+Duas coisas que o antigo Achado tinha e o novo Equipment Inspection não
+modela (ficaram de fora do resumo do achado): "Componente / Localização do
+Defeito" (texto livre por achado) e "Plano de Monitorização". A miniatura
+de imagem no cartão também saiu - Equipment Inspection permite várias
+imagens por ficha (galeria no diálogo de detalhe), não uma só, e não há
+forma barata de trazer "a primeira" para a lista sem uma query por linha.
+Em troca, o diálogo de detalhe agora mostra a tabela de leituras (ponto,
+mm/s, g's, temp.) do equipamento.
 
 ### Workspaces
 

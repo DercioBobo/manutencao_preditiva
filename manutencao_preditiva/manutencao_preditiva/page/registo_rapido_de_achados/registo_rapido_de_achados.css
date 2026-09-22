@@ -469,3 +469,45 @@
 		width: 100%;
 	}
 }
+
+/* ---- readings editor (inside the sheet dialog) --------------------------- */
+
+.rra-readings {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.rra-readings th,
+.rra-readings td {
+	border-bottom: 1px solid var(--rra-line);
+	padding: 5px 6px;
+	text-align: left;
+}
+
+.rra-readings th {
+	color: var(--rra-muted);
+	font-weight: 600;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.rra-readings-point {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.rra-readings input[type="number"] {
+	width: 100%;
+	border: 1px solid var(--rra-line);
+	border-radius: 6px;
+	padding: 4px 6px;
+	font-size: 13px;
+}
+
+.rra-suggested-note {
+	color: var(--rra-muted);
+	font-size: 12px;
+	margin: 2px 0 10px;
+}

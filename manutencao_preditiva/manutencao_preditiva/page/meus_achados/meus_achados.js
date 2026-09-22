@@ -1,5 +1,17 @@
 // Copyright (c) 2026, Dércio Bobo and contributors
 // For license information, please see license.txt
+//
+// Reads Equipment Inspection sheets (Inspection Report system) instead of
+// the old Achado De Inspecao. Kept in Portuguese - that's what this page's
+// clients already know - the port only changes what it reads from: the
+// underlying doctype/field names are now the English ones the report
+// system uses (see manutencao_preditiva/vibration.py). Severity and action
+// status are stored in English (frappe.ui.form Select options); the
+// *_LABEL_PT maps below are purely a display layer, never sent back to the
+// server (values round-trip through frappe.client.set_value untouched).
+//
+// A client only ever sees a sheet once its Inspection Report is Issued -
+// enforced server-side in manutencao_preditiva/permissions.py, not here.
 
 frappe.provide("manutencao_preditiva");
 
@@ -16,42 +28,55 @@ frappe.pages["meus-achados"].on_page_show = function (wrapper) {
 
 const MA_PAGE_SIZE = 50;
 
-const MA_SEVERIDADE_OPTIONS = ["Crítico", "Alarme", "Aceitável", "Boa Condição", "Não Recolhido"];
-const MA_ESTADO_OPTIONS = ["Pendente", "Em Curso", "Concluído", "Não Aplicável"];
+// Worst-first, matching the order clients want to triage in.
+const MA_SEVERIDADE_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
+const MA_ESTADO_OPTIONS = ["Open", "In Progress", "Done", "Not Applicable"];
 
+const MA_SEVERIDADE_LABEL_PT = {
+	Critical: "Crítico",
+	Alarm: "Alarme",
+	Acceptable: "Aceitável",
+	Normal: "Boa Condição",
+	"Not Collected": "Não Recolhido",
+};
+
+const MA_ESTADO_LABEL_PT = {
+	Open: "Pendente",
+	"In Progress": "Em Curso",
+	Done: "Concluído",
+	"Not Applicable": "Não Aplicável",
+};
+
+// Reuses the CSS classes/colors the page already had - only the keys
+// (English now, were Portuguese) changed.
 const MA_SEVERIDADE_BADGE = {
-	Crítico: "ma-badge-critico",
-	Alarme: "ma-badge-alarme",
-	Aceitável: "ma-badge-aceitavel",
-	"Boa Condição": "ma-badge-boa-condicao",
-	"Não Recolhido": "ma-badge-nao-recolhido",
+	Critical: "ma-badge-critico",
+	Alarm: "ma-badge-alarme",
+	Acceptable: "ma-badge-aceitavel",
+	Normal: "ma-badge-boa-condicao",
+	"Not Collected": "ma-badge-nao-recolhido",
 };
 
 const MA_ESTADO_BADGE = {
-	Pendente: "ma-badge-pendente",
-	"Em Curso": "ma-badge-em-curso",
-	Concluído: "ma-badge-concluido",
-	"Não Aplicável": "ma-badge-na",
+	Open: "ma-badge-pendente",
+	"In Progress": "ma-badge-em-curso",
+	Done: "ma-badge-concluido",
+	"Not Applicable": "ma-badge-na",
 };
 
-// Same hex values as the CSS custom properties above - frappe.Chart needs
-// literal colors, it can't read CSS variables. Kept identical to the badge
-// colors on purpose: severity/estado already have an established meaning
-// in this app (the card badges), so the charts reuse it rather than a
-// fresh categorical palette.
 const MA_SEVERIDADE_HEX = {
-	Crítico: "#c4453a",
-	Alarme: "#d99226",
-	Aceitável: "#b8a021",
-	"Boa Condição": "#3a9d5b",
-	"Não Recolhido": "#6b7680",
+	Critical: "#c4453a",
+	Alarm: "#d99226",
+	Acceptable: "#b8a021",
+	Normal: "#3a9d5b",
+	"Not Collected": "#6b7680",
 };
 
 const MA_ESTADO_HEX = {
-	Pendente: "#d99226",
-	"Em Curso": "#2b6cb0",
-	Concluído: "#3a9d5b",
-	"Não Aplicável": "#6b7680",
+	Open: "#d99226",
+	"In Progress": "#2b6cb0",
+	Done: "#3a9d5b",
+	"Not Applicable": "#6b7680",
 };
 
 function hex_to_rgba(hex, alpha) {
@@ -191,7 +216,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.$crosstab_areas = this.make_chart_card(this.$dashboard, __("Área × Severidade"));
 		this.$crosstab_equipamentos = this.make_chart_card(this.$dashboard, __("Equipamento × Severidade"));
 
-		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Campanha (Inspeção)"));
+		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Achados por Relatório (Inspeção)"));
 	}
 
 	make_chart_card(container, title) {
@@ -204,56 +229,57 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// tiles, which stay global - see load_dashboard). Deliberately its OWN
 	// filter state, separate from the Achados tab's - Painel is for
 	// monitoring KPIs, Achados is for finding/editing a record, and they
-	// don't need to stay in lockstep.
+	// don't need to stay in lockstep. Dates filter by report_date (when the
+	// reading was taken), not creation (when the sheet was typed up).
 	get_dashboard_base_filters() {
 		const filters = {};
-		if (this.painel_severity_filter) filters.severidade = this.painel_severity_filter;
-		if (this.painel_active_estado !== "all") filters.estado_da_accao = this.painel_active_estado;
-		if (this.painel_area_filter) filters.area_planta = this.painel_area_filter;
-		if (this.painel_equipamento_filter) filters.equipamento_referencia = this.painel_equipamento_filter;
+		if (this.painel_severity_filter) filters.severity = this.painel_severity_filter;
+		if (this.painel_active_estado !== "all") filters.action_status = this.painel_active_estado;
+		if (this.painel_area_filter) filters.area = this.painel_area_filter;
+		if (this.painel_equipamento_filter) filters.equipment = this.painel_equipamento_filter;
 		if (this.painel_date_from && this.painel_date_to) {
-			filters.creation = ["between", [this.painel_date_from, this.painel_date_to + " 23:59:59"]];
+			filters.report_date = ["between", [this.painel_date_from, this.painel_date_to]];
 		} else if (this.painel_date_from) {
-			filters.creation = [">=", this.painel_date_from];
+			filters.report_date = [">=", this.painel_date_from];
 		} else if (this.painel_date_to) {
-			filters.creation = ["<=", this.painel_date_to + " 23:59:59"];
+			filters.report_date = ["<=", this.painel_date_to];
 		}
 		return filters;
 	}
 
 	// List form of the same filters, for the 4 stat tiles specifically: each
 	// tile also has its OWN hardcoded condition (e.g. "Críticos" always
-	// requires severidade=Crítico), and a plain filters *object* can only
+	// requires severity=Critical), and a plain filters *object* can only
 	// hold one value per fieldname - merging two conditions on the same
 	// field would silently overwrite one of them. A filters *list* allows
 	// multiple conditions on the same field, so they correctly AND together
-	// instead (e.g. "Por Resolver" while painel_active_estado="Concluído"
+	// instead (e.g. "Por Resolver" while painel_active_estado="Done"
 	// correctly shows 0 - the two conditions are genuinely contradictory,
 	// which is the right answer once you've explicitly picked that filter).
 	get_dashboard_base_filters_list() {
 		const filters = [];
-		if (this.painel_severity_filter) filters.push(["severidade", "=", this.painel_severity_filter]);
-		if (this.painel_active_estado !== "all") filters.push(["estado_da_accao", "=", this.painel_active_estado]);
-		if (this.painel_area_filter) filters.push(["area_planta", "=", this.painel_area_filter]);
-		if (this.painel_equipamento_filter) filters.push(["equipamento_referencia", "=", this.painel_equipamento_filter]);
-		if (this.painel_date_from) filters.push(["creation", ">=", this.painel_date_from]);
-		if (this.painel_date_to) filters.push(["creation", "<=", this.painel_date_to + " 23:59:59"]);
+		if (this.painel_severity_filter) filters.push(["severity", "=", this.painel_severity_filter]);
+		if (this.painel_active_estado !== "all") filters.push(["action_status", "=", this.painel_active_estado]);
+		if (this.painel_area_filter) filters.push(["area", "=", this.painel_area_filter]);
+		if (this.painel_equipamento_filter) filters.push(["equipment", "=", this.painel_equipamento_filter]);
+		if (this.painel_date_from) filters.push(["report_date", ">=", this.painel_date_from]);
+		if (this.painel_date_to) filters.push(["report_date", "<=", this.painel_date_to]);
 		return filters;
 	}
 
 	// Drives the card list + table fetch (Achados tab).
 	get_achados_filters() {
 		const filters = {};
-		if (this.severity_filter) filters.severidade = this.severity_filter;
-		if (this.active_estado !== "all") filters.estado_da_accao = this.active_estado;
+		if (this.severity_filter) filters.severity = this.severity_filter;
+		if (this.active_estado !== "all") filters.action_status = this.active_estado;
 		return filters;
 	}
 
 	render_dashboard_filter_note() {
 		const base = this.get_dashboard_base_filters();
 		const parts = [];
-		if (base.severidade) parts.push(`${__("Severidade")}: <b>${frappe.utils.escape_html(base.severidade)}</b>`);
-		if (base.estado_da_accao) parts.push(`${__("Estado")}: <b>${frappe.utils.escape_html(base.estado_da_accao)}</b>`);
+		if (base.severity) parts.push(`${__("Severidade")}: <b>${frappe.utils.escape_html(MA_SEVERIDADE_LABEL_PT[base.severity])}</b>`);
+		if (base.action_status) parts.push(`${__("Estado")}: <b>${frappe.utils.escape_html(MA_ESTADO_LABEL_PT[base.action_status])}</b>`);
 		if (this.painel_date_from || this.painel_date_to) {
 			const from = this.painel_date_from ? frappe.datetime.str_to_user(this.painel_date_from) : "…";
 			const to = this.painel_date_to ? frappe.datetime.str_to_user(this.painel_date_to) : "…";
@@ -292,8 +318,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			$el.text(this._area_label_cache[code]);
 			return;
 		}
-		frappe.db.get_value("Area De Inspecao", code, "area").then((r) => {
-			const label = (r.message && r.message.area) || code;
+		frappe.db.get_value("Inspection Area", code, "area_name").then((r) => {
+			const label = (r.message && r.message.area_name) || code;
 			this._area_label_cache[code] = label;
 			$el.text(label);
 		});
@@ -306,8 +332,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			$el.text(this._equipamento_label_cache[code]);
 			return;
 		}
-		frappe.db.get_value("Equipamento De Inspecao", code, "equipamento").then((r) => {
-			const label = (r.message && r.message.equipamento) || code;
+		frappe.db.get_value("Inspection Equipment", code, "description").then((r) => {
+			const label = (r.message && r.message.description) || code;
 			this._equipamento_label_cache[code] = label;
 			$el.text(label);
 		});
@@ -323,76 +349,76 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			// filters LIST, not a plain object - see get_dashboard_base_filters_list
 			// for why that matters once a tile's own hardcoded condition and a
 			// user-picked filter could land on the same field).
-			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Achado De Inspecao", filters: base_list } }),
+			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Equipment Inspection", filters: base_list } }),
 			frappe.call({
 				method: "frappe.client.get_count",
 				args: {
-					doctype: "Achado De Inspecao",
-					filters: [...base_list, ["estado_da_accao", "in", ["Pendente", "Em Curso"]]],
+					doctype: "Equipment Inspection",
+					filters: [...base_list, ["action_status", "in", ["Open", "In Progress"]]],
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_count",
-				args: { doctype: "Achado De Inspecao", filters: [...base_list, ["severidade", "=", "Crítico"]] },
+				args: { doctype: "Equipment Inspection", filters: [...base_list, ["severity", "=", "Critical"]] },
 			}),
 			frappe.call({
 				method: "frappe.client.get_count",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: [
 						...base_list,
-						["prazo", "<", frappe.datetime.get_today()],
-						["estado_da_accao", "not in", ["Concluído", "Não Aplicável"]],
+						["due_date", "<", frappe.datetime.get_today()],
+						["action_status", "not in", ["Done", "Not Applicable"]],
 					],
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
-					fields: ["severidade", "count(name) as total"],
-					group_by: "severidade",
+					fields: ["severity", "count(name) as total"],
+					group_by: "severity",
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
-					fields: ["estado_da_accao", "count(name) as total"],
-					group_by: "estado_da_accao",
+					fields: ["action_status", "count(name) as total"],
+					group_by: "action_status",
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
-					fields: ["campanha", "count(name) as total"],
-					group_by: "campanha",
+					fields: ["report", "count(name) as total"],
+					group_by: "report",
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Campanha De Inspecao",
-					fields: ["name", "data_da_inspecao", "referencia_do_documento"],
-					order_by: "data_da_inspecao asc",
+					doctype: "Inspection Report",
+					fields: ["name", "report_date", "period_label"],
+					order_by: "report_date asc",
 					limit_page_length: 0,
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
 					fields: [
-						"area_planta",
-						"area_planta.area as area_nome",
-						"count(`tabAchado De Inspecao`.name) as total",
+						"area",
+						"area.area_name as area_nome",
+						"count(`tabEquipment Inspection`.name) as total",
 					],
-					group_by: "area_planta",
+					group_by: "area",
 					order_by: "total desc",
 					limit_page_length: 5,
 				},
@@ -400,14 +426,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
-					fields: [
-						"equipamento_referencia",
-						"equipamento_referencia.equipamento as equipamento_nome",
-						"count(`tabAchado De Inspecao`.name) as total",
-					],
-					group_by: "equipamento_referencia",
+					fields: ["equipment", "equipment_description", "count(name) as total"],
+					group_by: "equipment",
 					order_by: "total desc",
 					limit_page_length: 5,
 				},
@@ -415,29 +437,24 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
 					fields: [
-						"area_planta",
-						"area_planta.area as area_nome",
-						"severidade",
-						"count(`tabAchado De Inspecao`.name) as total",
+						"area",
+						"area.area_name as area_nome",
+						"severity",
+						"count(`tabEquipment Inspection`.name) as total",
 					],
-					group_by: "area_planta, severidade",
+					group_by: "area, severity",
 				},
 			}),
 			frappe.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters: base,
-					fields: [
-						"equipamento_referencia",
-						"equipamento_referencia.equipamento as equipamento_nome",
-						"severidade",
-						"count(`tabAchado De Inspecao`.name) as total",
-					],
-					group_by: "equipamento_referencia, severidade",
+					fields: ["equipment", "equipment_description", "severity", "count(name) as total"],
+					group_by: "equipment, severity",
 				},
 			}),
 		]).then((results) => {
@@ -448,8 +465,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				atraso,
 				by_severidade,
 				by_estado,
-				by_campanha,
-				campanhas,
+				by_report,
+				reports,
 				top_areas,
 				top_equipamentos,
 				crosstab_areas,
@@ -463,11 +480,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			});
 			this.render_severidade_chart(by_severidade || []);
 			this.render_estado_chart(by_estado || []);
-			this.render_ranking(this.$rank_areas, top_areas || [], "area_nome", "area_planta");
-			this.render_ranking(this.$rank_equipamentos, top_equipamentos || [], "equipamento_nome", "equipamento_referencia");
-			this.render_crosstab(this.$crosstab_areas, crosstab_areas || [], "area_nome", "area_planta");
-			this.render_crosstab(this.$crosstab_equipamentos, crosstab_equipamentos || [], "equipamento_nome", "equipamento_referencia");
-			this.render_trend_chart(by_campanha || [], campanhas || []);
+			this.render_ranking(this.$rank_areas, top_areas || [], "area_nome", "area");
+			this.render_ranking(this.$rank_equipamentos, top_equipamentos || [], "equipment_description", "equipment");
+			this.render_crosstab(this.$crosstab_areas, crosstab_areas || [], "area_nome", "area");
+			this.render_crosstab(this.$crosstab_equipamentos, crosstab_equipamentos || [], "equipment_description", "equipment");
+			this.render_trend_chart(by_report || [], reports || []);
 		});
 	}
 
@@ -497,8 +514,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	render_severidade_chart(rows) {
 		const items = [];
 		MA_SEVERIDADE_OPTIONS.forEach((sev) => {
-			const row = rows.find((r) => r.severidade === sev);
-			if (row && row.total) items.push({ label: sev, value: row.total, color: MA_SEVERIDADE_HEX[sev] });
+			const row = rows.find((r) => r.severity === sev);
+			if (row && row.total) items.push({ label: MA_SEVERIDADE_LABEL_PT[sev], value: row.total, color: MA_SEVERIDADE_HEX[sev] });
 		});
 		this.render_comp_bar(this.$chart_severidade, items);
 	}
@@ -506,8 +523,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	render_estado_chart(rows) {
 		const items = [];
 		MA_ESTADO_OPTIONS.forEach((estado) => {
-			const row = rows.find((r) => r.estado_da_accao === estado);
-			if (row && row.total) items.push({ label: estado, value: row.total, color: MA_ESTADO_HEX[estado] });
+			const row = rows.find((r) => r.action_status === estado);
+			if (row && row.total) items.push({ label: MA_ESTADO_LABEL_PT[estado], value: row.total, color: MA_ESTADO_HEX[estado] });
 		});
 		this.render_comp_bar(this.$chart_estado, items);
 	}
@@ -551,9 +568,9 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		});
 	}
 
-	// rows: one row per (dimension, severidade) combination with its count,
-	// e.g. [{area_planta, area_nome, severidade, total}, ...]. Pivots into a
-	// dimension × severidade grid, limited to the top 8 dimension values by
+	// rows: one row per (dimension, severity) combination with its count,
+	// e.g. [{area, area_nome, severity, total}, ...]. Pivots into a
+	// dimension × severity grid, limited to the top 8 dimension values by
 	// total count so the table stays readable.
 	render_crosstab($body, rows, name_field, code_field) {
 		$body.empty();
@@ -567,7 +584,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			totals_by_dim[key] = (totals_by_dim[key] || 0) + row.total;
 			label_by_dim[key] = row[name_field] || key;
 			matrix[key] = matrix[key] || {};
-			matrix[key][row.severidade] = row.total;
+			matrix[key][row.severity] = row.total;
 		});
 
 		const top_dims = Object.keys(totals_by_dim)
@@ -578,7 +595,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		const $table = $('<table class="ma-crosstab">').appendTo($scroll);
 		const $thead_row = $("<tr>").appendTo($("<thead>").appendTo($table));
 		$("<th>").appendTo($thead_row);
-		MA_SEVERIDADE_OPTIONS.forEach((sev) => $("<th>").text(sev).appendTo($thead_row));
+		MA_SEVERIDADE_OPTIONS.forEach((sev) => $("<th>").text(MA_SEVERIDADE_LABEL_PT[sev]).appendTo($thead_row));
 		$("<th>").text(__("Total")).appendTo($thead_row);
 
 		const $tbody = $("<tbody>").appendTo($table);
@@ -606,19 +623,19 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		}
 	}
 
-	render_trend_chart(campanha_counts, campanhas) {
+	render_trend_chart(report_counts, reports) {
 		this.$chart_trend.empty();
 		const counts_by_name = {};
-		campanha_counts.forEach((r) => {
-			counts_by_name[r.campanha] = r.total;
+		report_counts.forEach((r) => {
+			counts_by_name[r.report] = r.total;
 		});
 
 		const labels = [];
 		const values = [];
-		campanhas.forEach((c) => {
-			if (!counts_by_name[c.name]) return;
-			labels.push(c.data_da_inspecao ? frappe.datetime.str_to_user(c.data_da_inspecao) : c.name);
-			values.push(counts_by_name[c.name]);
+		reports.forEach((r) => {
+			if (!counts_by_name[r.name]) return;
+			labels.push(r.period_label || (r.report_date ? frappe.datetime.str_to_user(r.report_date) : r.name));
+			values.push(counts_by_name[r.name]);
 		});
 
 		if (!labels.length) return this.render_empty_chart(this.$chart_trend);
@@ -642,14 +659,16 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.$severity_select = $('<select class="ma-select">').appendTo($bar);
 		$(`<option value="">${__("Todas as severidades")}</option>`).appendTo(this.$severity_select);
-		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$severity_select));
+		MA_SEVERIDADE_OPTIONS.forEach((s) =>
+			$(`<option value="${s}">${MA_SEVERIDADE_LABEL_PT[s]}</option>`).appendTo(this.$severity_select)
+		);
 		this.$severity_select.on("change", () => {
 			this.severity_filter = this.$severity_select.val();
 			this.on_achados_filters_change();
 		});
 
 		this.$chips = $('<div class="ma-chips">').appendTo($bar);
-		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
+		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, MA_ESTADO_LABEL_PT[s]]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
 				this.$chips
@@ -677,14 +696,16 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		this.$painel_severity_select = $('<select class="ma-select">').appendTo($row1);
 		$(`<option value="">${__("Todas as severidades")}</option>`).appendTo(this.$painel_severity_select);
-		MA_SEVERIDADE_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$painel_severity_select));
+		MA_SEVERIDADE_OPTIONS.forEach((s) =>
+			$(`<option value="${s}">${MA_SEVERIDADE_LABEL_PT[s]}</option>`).appendTo(this.$painel_severity_select)
+		);
 		this.$painel_severity_select.on("change", () => {
 			this.painel_severity_filter = this.$painel_severity_select.val();
 			this.load_dashboard();
 		});
 
 		this.$painel_chips = $('<div class="ma-chips">').appendTo($row1);
-		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, s]));
+		const chip_defs = [["all", __("Todos")]].concat(MA_ESTADO_OPTIONS.map((s) => [s, MA_ESTADO_LABEL_PT[s]]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
 				this.$painel_chips
@@ -707,7 +728,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				fieldtype: "Link",
 				fieldname: "painel_area",
 				label: __("Área"),
-				options: "Area De Inspecao",
+				options: "Inspection Area",
 				onchange: () => {
 					this.painel_area_filter = this.painel_area_control.get_value();
 					this.load_dashboard();
@@ -724,7 +745,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				fieldtype: "Link",
 				fieldname: "painel_equipamento",
 				label: __("Equipamento"),
-				options: "Equipamento De Inspecao",
+				options: "Inspection Equipment",
 				onchange: () => {
 					this.painel_equipamento_filter = this.painel_equipamento_control.get_value();
 					this.load_dashboard();
@@ -792,11 +813,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.entries.forEach((entry) => {
 			const row = entry.data;
 			const haystack = [
-				row.equipamento_nome || row.equipamento_referencia,
-				row.area_nome || row.area_planta,
-				row.componente,
-				row.descricao_do_defeito,
-				row.severidade,
+				row.equipment_description || row.equipment,
+				row.area_nome || row.area,
+				row.defects,
+				row.severity,
 			]
 				.filter(Boolean)
 				.join(" ")
@@ -822,14 +842,14 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		}
 		const counts = {};
 		this.entries.forEach((entry) => {
-			const estado = entry.data.estado_da_accao || "Pendente";
+			const estado = entry.data.action_status || "Open";
 			counts[estado] = (counts[estado] || 0) + 1;
 		});
 
 		const parts = [`<span class="ma-summary-total">${this.entries.length} ${__("achados")}</span>`];
 		MA_ESTADO_OPTIONS.forEach((estado) => {
 			if (counts[estado]) {
-				parts.push(`<span class="ma-badge ${MA_ESTADO_BADGE[estado]}">${counts[estado]} ${estado}</span>`);
+				parts.push(`<span class="ma-badge ${MA_ESTADO_BADGE[estado]}">${counts[estado]} ${MA_ESTADO_LABEL_PT[estado]}</span>`);
 			}
 		});
 		this.$summary.html(parts.join(""));
@@ -863,22 +883,22 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters,
 					fields: [
 						"name",
-						"area_planta",
-						"area_planta.area as area_nome",
-						"equipamento_referencia",
-						"equipamento_referencia.equipamento as equipamento_nome",
-						"componente",
-						"severidade",
-						"descricao_do_defeito",
-						"estado_da_accao",
-						"imagem",
+						"area",
+						"area.area_name as area_nome",
+						"equipment",
+						"equipment_description",
+						"severity",
+						"defects",
+						"action_status",
+						"report",
+						"report.period_label as period_label",
 						"creation",
 					],
-					order_by: "creation desc",
+					order_by: "report_date desc, creation desc",
 					limit_start: this.offset,
 					limit_page_length: MA_PAGE_SIZE,
 				},
@@ -902,27 +922,26 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	build_card(entry) {
 		const row = entry.data;
-		const sev_class = MA_SEVERIDADE_BADGE[row.severidade] || "ma-badge-nao-recolhido";
-		const estado_class = MA_ESTADO_BADGE[row.estado_da_accao] || "ma-badge-pendente";
+		const sev_class = MA_SEVERIDADE_BADGE[row.severity] || "ma-badge-nao-recolhido";
+		const estado_class = MA_ESTADO_BADGE[row.action_status] || "ma-badge-pendente";
 
 		const $card = $('<div class="ma-card">');
 		const $row = $('<div class="ma-row">').appendTo($card);
 
-		if (row.imagem) {
-			$(`<img class="ma-thumb" src="${frappe.utils.escape_html(row.imagem)}">`).appendTo($row);
-		}
-
 		const $badges = $('<div class="ma-badges">').appendTo($row);
-		$(`<span class="ma-badge ${sev_class}">`).text(row.severidade || "").appendTo($badges);
-		$(`<span class="ma-badge ${estado_class}">`).text(row.estado_da_accao || __("Pendente")).appendTo($badges);
+		$(`<span class="ma-badge ${sev_class}">`).text(MA_SEVERIDADE_LABEL_PT[row.severity] || "").appendTo($badges);
+		$(`<span class="ma-badge ${estado_class}">`).text(MA_ESTADO_LABEL_PT[row.action_status] || __("Pendente")).appendTo($badges);
 
 		const $main = $('<div class="ma-main">').appendTo($row);
-		const $title = $('<div class="ma-title">').appendTo($main);
-		$title.text([row.equipamento_nome || row.equipamento_referencia, row.componente].filter(Boolean).join(" · "));
-		$('<div class="ma-sub">').text(row.descricao_do_defeito || "").appendTo($main);
+		const $title = $('<div class="ma-title">').text(row.equipment_description || row.equipment || "").appendTo($main);
+		$('<div class="ma-sub">').text(row.defects || "").appendTo($main);
 
 		const $meta = $('<div class="ma-meta">').appendTo($row);
-		$("<span>").text(row.area_nome || row.area_planta || "").appendTo($meta);
+		$("<span>").text(row.area_nome || row.area || "").appendTo($meta);
+		if (row.period_label) {
+			$("<span>&middot;</span>").appendTo($meta);
+			$("<span>").text(row.period_label).appendTo($meta);
+		}
 		$("<span>&middot;</span>").appendTo($meta);
 		$("<span>").html(comment_when(row.creation)).appendTo($meta);
 
@@ -939,12 +958,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		// Cards/Tabela toggle (so they also drive the card list + dashboard).
 		// Still sortable, since sorting the already-fetched rows is unrelated.
 		return [
-			{ field: "severidade", label: __("Severidade"), sortable: true },
-			{ field: "equipamento_nome", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
-			{ field: "componente", label: __("Componente") },
+			{ field: "severity", label: __("Severidade"), sortable: true },
+			{ field: "equipment_description", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
 			{ field: "area_nome", label: __("Área / Planta"), sortable: true, filter: "text", filterKey: "area" },
-			{ field: "estado_da_accao", label: __("Estado"), sortable: true },
-			{ field: "descricao_do_defeito", label: __("Descrição do Defeito") },
+			{ field: "period_label", label: __("Período"), sortable: true },
+			{ field: "action_status", label: __("Estado"), sortable: true },
+			{ field: "defects", label: __("Descrição do Defeito") },
 			{ field: "creation", label: __("Quando"), sortable: true },
 		];
 	}
@@ -963,21 +982,21 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			.call({
 				method: "frappe.client.get_list",
 				args: {
-					doctype: "Achado De Inspecao",
+					doctype: "Equipment Inspection",
 					filters,
 					fields: [
 						"name",
-						"area_planta",
-						"area_planta.area as area_nome",
-						"equipamento_referencia",
-						"equipamento_referencia.equipamento as equipamento_nome",
-						"componente",
-						"severidade",
-						"descricao_do_defeito",
-						"estado_da_accao",
+						"area",
+						"area.area_name as area_nome",
+						"equipment",
+						"equipment_description",
+						"severity",
+						"defects",
+						"action_status",
+						"report.period_label as period_label",
 						"creation",
 					],
-					order_by: "creation desc",
+					order_by: "report_date desc, creation desc",
 					limit_page_length: 500,
 				},
 			})
@@ -1035,8 +1054,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	}
 
 	get_table_sort_value(row, field) {
-		if (field === "severidade") return MA_SEVERIDADE_OPTIONS.indexOf(row.severidade);
-		if (field === "estado_da_accao") return MA_ESTADO_OPTIONS.indexOf(row.estado_da_accao || "Pendente");
+		if (field === "severity") return MA_SEVERIDADE_OPTIONS.indexOf(row.severity);
+		if (field === "action_status") return MA_ESTADO_OPTIONS.indexOf(row.action_status || "Open");
 		return (row[field] || "").toString().toLowerCase();
 	}
 
@@ -1062,11 +1081,11 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		const columns = this.get_table_columns();
 		let rows = (this.table_rows || []).filter((row) => {
 			if (this.table_filters.equipamento) {
-				const v = (row.equipamento_nome || row.equipamento_referencia || "").toLowerCase();
+				const v = (row.equipment_description || row.equipment || "").toLowerCase();
 				if (!v.includes(this.table_filters.equipamento.toLowerCase())) return false;
 			}
 			if (this.table_filters.area) {
-				const v = (row.area_nome || row.area_planta || "").toLowerCase();
+				const v = (row.area_nome || row.area || "").toLowerCase();
 				if (!v.includes(this.table_filters.area.toLowerCase())) return false;
 			}
 			return true;
@@ -1095,12 +1114,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			const $tr = $("<tr>").appendTo(this.$table_tbody);
 			columns.forEach((col) => {
 				const $td = $("<td>").appendTo($tr);
-				if (col.field === "severidade") {
-					const cls = MA_SEVERIDADE_BADGE[row.severidade] || "ma-badge-nao-recolhido";
-					$(`<span class="ma-badge ${cls}">`).text(row.severidade || "").appendTo($td);
-				} else if (col.field === "estado_da_accao") {
-					const estado = row.estado_da_accao || __("Pendente");
-					const cls = MA_ESTADO_BADGE[row.estado_da_accao] || "ma-badge-pendente";
+				if (col.field === "severity") {
+					const cls = MA_SEVERIDADE_BADGE[row.severity] || "ma-badge-nao-recolhido";
+					$(`<span class="ma-badge ${cls}">`).text(MA_SEVERIDADE_LABEL_PT[row.severity] || "").appendTo($td);
+				} else if (col.field === "action_status") {
+					const estado = MA_ESTADO_LABEL_PT[row.action_status] || __("Pendente");
+					const cls = MA_ESTADO_BADGE[row.action_status] || "ma-badge-pendente";
 					$(`<span class="ma-badge ${cls}">`).text(estado).appendTo($td);
 				} else if (col.field === "creation") {
 					$td.html(comment_when(row.creation));
@@ -1115,24 +1134,14 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// ---- detail + response dialog -----------------------------------------------
 
 	build_summary_html(data) {
-		const rows = [[__("Severidade"), `<span class="ma-badge ${MA_SEVERIDADE_BADGE[data.severidade] || "ma-badge-nao-recolhido"}">${frappe.utils.escape_html(data.severidade || "")}</span>`]];
+		const rows = [[__("Severidade"), `<span class="ma-badge ${MA_SEVERIDADE_BADGE[data.severity] || "ma-badge-nao-recolhido"}">${frappe.utils.escape_html(MA_SEVERIDADE_LABEL_PT[data.severity] || "")}</span>`]];
 
-		rows.push([__("Equipamento"), frappe.utils.escape_html(data.equipamento_nome || data.equipamento_referencia || "")]);
-		if (data.componente) rows.push([__("Componente"), frappe.utils.escape_html(data.componente)]);
-		rows.push([__("Área / Planta"), frappe.utils.escape_html(data.area_nome || data.area_planta || "")]);
-		rows.push([__("Descrição do Defeito"), frappe.utils.escape_html(data.descricao_do_defeito || "")]);
-		if (data.acao_recomendada) rows.push([__("Ação Recomendada"), frappe.utils.escape_html(data.acao_recomendada)]);
-		if (data.plano_de_monitorizacao)
-			rows.push([__("Plano de Monitorização"), frappe.utils.escape_html(data.plano_de_monitorizacao)]);
-
-		if (data.tecnica === "Termografia") {
-			const fmt = (v) => Math.round(v * 100) / 100;
-			const temps = [];
-			if (data.temp_max_operacao != null) temps.push(`${__("Máx. Operação")}: ${fmt(data.temp_max_operacao)}°C`);
-			if (data.temp_actual != null) temps.push(`${__("Actual")}: ${fmt(data.temp_actual)}°C`);
-			if (data.temp_ambiente != null) temps.push(`${__("Ambiente")}: ${fmt(data.temp_ambiente)}°C`);
-			if (temps.length) rows.push([__("Temperaturas"), temps.join(" · ")]);
-		}
+		rows.push([__("Equipamento"), frappe.utils.escape_html(data.equipment_description || data.equipment || "")]);
+		rows.push([__("Área / Planta"), frappe.utils.escape_html(data.area_nome || data.area || "")]);
+		if (data.report_date) rows.push([__("Data do Relatório"), frappe.datetime.str_to_user(data.report_date)]);
+		if (data.defects) rows.push([__("Defeitos Encontrados"), frappe.utils.escape_html(data.defects)]);
+		if (data.recommendations) rows.push([__("Recomendações"), frappe.utils.escape_html(data.recommendations)]);
+		if (data.follow_up) rows.push([__("Ações Tomadas"), frappe.utils.escape_html(data.follow_up)]);
 
 		let html = '<div class="ma-summary-block">';
 		rows.forEach(([label, value]) => {
@@ -1140,8 +1149,31 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		});
 		html += "</div>";
 
-		if (data.imagem) {
-			html += `<img class="ma-summary-image" src="${frappe.utils.escape_html(data.imagem)}">`;
+		const readings = (data.readings || []).filter((r) => r.velocity_mm_s || r.acceleration_g || r.temperature_c);
+		if (readings.length) {
+			html += '<div class="ma-crosstab-scroll" style="margin-top:10px"><table class="ma-crosstab"><thead><tr>';
+			html += `<th>${__("Ponto")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead><tbody>`;
+			readings.forEach((r) => {
+				const cell = (value, severity) => {
+					if (!value) return "<td></td>";
+					const color = MA_SEVERIDADE_HEX[severity];
+					const style = color ? ` style="background:${hex_to_rgba(color, 0.14)};color:${color};font-weight:700"` : "";
+					return `<td${style}>${value}</td>`;
+				};
+				html += `<tr><td class="ma-crosstab-label">${frappe.utils.escape_html(r.point || "")}</td>`;
+				html += cell(r.velocity_mm_s, r.velocity_severity);
+				html += cell(r.acceleration_g, r.acceleration_severity);
+				html += `<td>${r.temperature_c || ""}</td></tr>`;
+			});
+			html += "</tbody></table></div>";
+		}
+
+		if ((data.images || []).length) {
+			html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">';
+			data.images.forEach((img) => {
+				html += `<img class="ma-summary-image" src="${frappe.utils.escape_html(img.image)}">`;
+			});
+			html += "</div>";
 		}
 
 		return html;
@@ -1158,20 +1190,16 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		frappe.dom.freeze(__("A abrir achado..."));
 
 		frappe
-			.call({ method: "frappe.client.get", args: { doctype: "Achado De Inspecao", name } })
+			.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } })
 			.then((r) => {
 				const data = r.message;
 
 				return Promise.all([
-					data.area_planta
-						? frappe.db.get_value("Area De Inspecao", data.area_planta, "area")
+					data.area
+						? frappe.db.get_value("Inspection Area", data.area, "area_name")
 						: Promise.resolve({ message: {} }),
-					data.equipamento_referencia
-						? frappe.db.get_value("Equipamento De Inspecao", data.equipamento_referencia, "equipamento")
-						: Promise.resolve({ message: {} }),
-				]).then(([area_r, equip_r]) => {
-					data.area_nome = area_r.message && area_r.message.area;
-					data.equipamento_nome = equip_r.message && equip_r.message.equipamento;
+				]).then(([area_r]) => {
+					data.area_nome = area_r.message && area_r.message.area_name;
 					this.show_achado_dialog(data);
 				});
 			})
@@ -1187,31 +1215,39 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			fields: [
 				{ fieldtype: "HTML", fieldname: "resumo", options: this.build_summary_html(data) },
 				{ fieldtype: "Section Break", label: __("A Sua Resposta") },
-				{ fieldtype: "Small Text", fieldname: "resposta_do_cliente", label: __("Ação Tomada / Resposta") },
+				{ fieldtype: "Small Text", fieldname: "client_response", label: __("Ação Tomada / Resposta") },
 				{ fieldtype: "Column Break" },
-				{ fieldtype: "Data", fieldname: "responsavel", label: __("Responsável") },
+				{ fieldtype: "Data", fieldname: "responsible", label: __("Responsável") },
 				{ fieldtype: "Section Break" },
-				{ fieldtype: "Date", fieldname: "prazo", label: __("Prazo") },
+				{ fieldtype: "Date", fieldname: "due_date", label: __("Prazo") },
 				{ fieldtype: "Column Break" },
 				{
 					fieldtype: "Select",
-					fieldname: "estado_da_accao",
+					fieldname: "action_status",
 					label: __("Estado da Ação"),
 					options: MA_ESTADO_OPTIONS.join("\n"),
 				},
 				{ fieldtype: "Section Break" },
-				{ fieldtype: "Date", fieldname: "data_de_conclusao", label: __("Data de Conclusão") },
+				{ fieldtype: "Date", fieldname: "completion_date", label: __("Data de Conclusão") },
 			],
 			primary_action_label: __("Guardar Resposta"),
 			primary_action: (values) => this.save_response(dialog, data.name, values),
 		});
 
 		dialog.set_values({
-			resposta_do_cliente: data.resposta_do_cliente,
-			responsavel: data.responsavel,
-			prazo: data.prazo,
-			estado_da_accao: data.estado_da_accao,
-			data_de_conclusao: data.data_de_conclusao,
+			client_response: data.client_response,
+			responsible: data.responsible,
+			due_date: data.due_date,
+			action_status: data.action_status,
+			completion_date: data.completion_date,
+		});
+
+		// The Select field's stored values are English (Open/In Progress/...)
+		// so filters and set_value round-trip untouched - only the displayed
+		// text is swapped to Portuguese, right after render.
+		dialog.fields_dict.action_status.$input.find("option").each((_, opt) => {
+			const $opt = $(opt);
+			$opt.text(MA_ESTADO_LABEL_PT[$opt.attr("value")] || $opt.attr("value"));
 		});
 
 		dialog.show();
@@ -1223,7 +1259,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		frappe
 			.call({
 				method: "frappe.client.set_value",
-				args: { doctype: "Achado De Inspecao", name, fieldname: values },
+				args: { doctype: "Equipment Inspection", name, fieldname: values },
 			})
 			.then((r) => {
 				frappe.show_alert({ message: __("Resposta guardada"), indicator: "green" });
@@ -1232,7 +1268,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				const entry = this.entries.find((e) => e.data.name === name);
 				if (entry) {
 					entry.data = Object.assign({}, entry.data, {
-						estado_da_accao: r.message.estado_da_accao,
+						action_status: r.message.action_status,
 					});
 					const $old_card = entry.$card;
 					entry.$card = this.build_card(entry);
