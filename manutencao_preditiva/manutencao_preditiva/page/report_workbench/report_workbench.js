@@ -5,15 +5,18 @@
 // Report, see its whole team-facing picture in one place - status, severity
 // summary, every Equipment Inspection sheet in it - and jump to the PDF.
 //
-// Deliberately does NOT duplicate sheet editing here. Clicking a sheet
-// navigates to its native Equipment Inspection form (which already
-// auto-fills the readings table on picking an equipment, see
-// equipment_inspection.js) instead of opening a third copy of that UI - the
-// same editing surface already exists on the form and in Quick Finding
-// Entry, and a third hand-built one here would mean keeping three things in
-// sync with no bench to test any of them against. This page's job is the
-// overview and the connections between the pieces, not re-implementing
-// data entry.
+// Clicking a sheet opens it in a Dialog right here, not a page navigation -
+// the readings editor, diagnosis fields and save logic below are adapted
+// from Quick Finding Entry's (registo_rapido_de_achados.js) rather than
+// invented fresh, so this is still only the SECOND editing surface in the
+// app, not a third: the native Equipment Inspection form (full-featured,
+// linked from "Open Full Form" inside the dialog for anything this lighter
+// editor doesn't cover, e.g. more than one new image) and this shared
+// Dialog pattern, now used by both this page and Quick Finding Entry.
+// A real side panel or a second full page were both considered and
+// rejected - a Dialog is a well-worn Frappe component, and hand-building
+// panel positioning/animation with no bench to preview it against was not
+// worth the risk for what is ultimately a cosmetic difference.
 //
 // Staff-only (System Manager / Tecnico de Inspecao) - not client-facing,
 // see My Findings for that.
@@ -442,7 +445,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				.appendTo($tr);
 			$("<td>").html(row.action_status ? rw_badge(row.action_status, RW_STATUS_HEX[row.action_status]) : "").appendTo($tr);
 			$("<td class='rw-ellipsis'>").attr("title", row.defects || "").text(row.defects || "").appendTo($tr);
-			$tr.on("click", () => frappe.set_route("Form", "Equipment Inspection", row.name));
+			$tr.on("click", () => this.open_sheet_dialog(row.name));
 		});
 	}
 
@@ -500,11 +503,190 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 					})
 					.then((r) => {
 						dialog.hide();
-						frappe.set_route("Form", "Equipment Inspection", r.message.name);
+						this.load_sheets();
+						this.load_summary();
+						this.open_sheet_dialog(r.message.name, r.message);
 					})
 					.always(() => dialog.get_primary_btn().prop("disabled", false));
 			},
 		});
 		dialog.show();
+	}
+
+	// ---- sheet editor: adapted from Quick Finding Entry, see file header ------
+
+	// Points don't change here (they come from the equipment, fixed once the
+	// sheet exists) - only the three numbers per point are editable. Reading
+	// them back is a matter of walking the rows, so a hand-built grid is a
+	// lot less risky than a Table-fieldtype control inside a raw Dialog.
+	render_sheet_readings_editor($wrap, readings) {
+		$wrap.empty();
+		if (!readings || !readings.length) {
+			$wrap.html(
+				`<p class="text-muted">${__("This equipment has no measurement points configured - add them in Equipment before recording readings.")}</p>`
+			);
+			return;
+		}
+
+		const $table = $('<table class="rw-readings">').appendTo($wrap);
+		$table.append(
+			`<thead><tr><th>${__("Point")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead>`
+		);
+		const $tbody = $("<tbody>").appendTo($table);
+
+		readings.forEach((row) => {
+			const $tr = $("<tr>").attr("data-point", row.point || "").appendTo($tbody);
+			$(`<td class="rw-readings-point">`).text(row.point || "").appendTo($tr);
+			[
+				["velocity_mm_s", "rw-read-velocity"],
+				["acceleration_g", "rw-read-acceleration"],
+				["temperature_c", "rw-read-temp"],
+			].forEach(([fieldname, cls]) => {
+				const $input = $(`<input type="number" step="any" class="${cls}">`).val(
+					row[fieldname] != null ? row[fieldname] : ""
+				);
+				$("<td>").append($input).appendTo($tr);
+			});
+		});
+	}
+
+	collect_sheet_readings($wrap) {
+		const readings = [];
+		$wrap.find("tr[data-point]").each((_, tr) => {
+			const $tr = $(tr);
+			readings.push({
+				point: $tr.attr("data-point"),
+				velocity_mm_s: $tr.find(".rw-read-velocity").val() || null,
+				acceleration_g: $tr.find(".rw-read-acceleration").val() || null,
+				temperature_c: $tr.find(".rw-read-temp").val() || null,
+			});
+		});
+		return readings;
+	}
+
+	get_sheet_dialog_fields(data) {
+		const suggested = data.suggested_severity;
+		const overridden = !!(data.severity && data.severity !== suggested);
+
+		return [
+			{ fieldtype: "HTML", fieldname: "equipment_display", options: "" },
+			{ fieldtype: "Section Break", label: __("Readings") },
+			{ fieldtype: "HTML", fieldname: "readings_html", options: "" },
+			{
+				fieldtype: "HTML",
+				fieldname: "suggested_note",
+				options: `<div class="rw-suggested-note">${__("Severity suggested by the readings")}: <b>${
+					suggested || "—"
+				}</b> (${__("recalculated on save")})</div>`,
+			},
+			{ fieldtype: "Percent", fieldname: "tolerance_percent", label: __("Tolerance (%)") },
+			{ fieldtype: "Section Break", label: __("Diagnosis") },
+			{ fieldtype: "Small Text", fieldname: "defects", label: __("Defects Found") },
+			{ fieldtype: "Column Break" },
+			{ fieldtype: "Small Text", fieldname: "recommendations", label: __("Recommendations") },
+			{ fieldtype: "Section Break" },
+			{ fieldtype: "Small Text", fieldname: "follow_up", label: __("Actions Taken / Follow-up") },
+			{ fieldtype: "Section Break" },
+			{
+				fieldtype: "Check",
+				fieldname: "override_severity",
+				label: __("Override suggested severity"),
+				default: overridden ? 1 : 0,
+				description: __(
+					"Leave unchecked for severity to follow the readings automatically. Use this when the diagnosis (e.g. a bearing defect seen in the spectrum) is worse than the readings alone indicate."
+				),
+			},
+			{
+				fieldtype: "Select",
+				fieldname: "severity",
+				label: __("Severity"),
+				options: RW_SEVERITY_OPTIONS.join("\n"),
+				depends_on: "eval:doc.override_severity",
+				mandatory_depends_on: "eval:doc.override_severity",
+			},
+			{ fieldtype: "Section Break", label: __("Image") },
+			{ fieldtype: "Attach Image", fieldname: "new_image", label: __("Add Image") },
+		];
+	}
+
+	// name + optional preloaded_data (the doc just came back from an insert,
+	// so there's no reason to fetch it again) - opens the sheet editor.
+	open_sheet_dialog(name, preloaded_data) {
+		const show_dialog = (data) => {
+			const dialog = new frappe.ui.Dialog({
+				title: __("Equipment Sheet {0}", [data.name]),
+				size: "large",
+				fields: this.get_sheet_dialog_fields(data),
+				primary_action_label: __("Save"),
+				primary_action: (values) => this.save_sheet(dialog, data, values),
+			});
+
+			dialog.fields_dict.equipment_display.$wrapper.html(
+				`<div class="rw-report-meta"><span>${__("Equipment")}: <b>${frappe.utils.escape_html(
+					data.equipment_description || data.equipment
+				)}</b></span><span><a href="#" class="rw-open-full-form">${__("Open Full Form")}</a></span></div>`
+			);
+			dialog.$wrapper.find(".rw-open-full-form").on("click", (e) => {
+				e.preventDefault();
+				dialog.hide();
+				frappe.set_route("Form", "Equipment Inspection", data.name);
+			});
+
+			this.render_sheet_readings_editor(dialog.fields_dict.readings_html.$wrapper, data.readings || []);
+
+			dialog.set_values({
+				tolerance_percent: data.tolerance_percent || 0,
+				defects: data.defects,
+				recommendations: data.recommendations,
+				follow_up: data.follow_up,
+				severity: data.severity || "",
+			});
+
+			dialog.show();
+		};
+
+		if (preloaded_data) {
+			show_dialog(preloaded_data);
+			return;
+		}
+
+		frappe.dom.freeze(__("Opening sheet..."));
+		frappe
+			.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } })
+			.then((r) => show_dialog(r.message))
+			.always(() => frappe.dom.unfreeze());
+	}
+
+	save_sheet(dialog, data, values) {
+		dialog.get_primary_btn().prop("disabled", true);
+
+		const readings = this.collect_sheet_readings(dialog.fields_dict.readings_html.$wrapper);
+		const update = {
+			readings,
+			tolerance_percent: values.tolerance_percent || 0,
+			defects: values.defects,
+			recommendations: values.recommendations,
+			follow_up: values.follow_up,
+		};
+		if (values.override_severity && values.severity) update.severity = values.severity;
+		if (values.new_image) {
+			// Only the business fields - see Quick Finding Entry's save_finding()
+			// for why a fetched child row's own metadata isn't re-sent as-is.
+			const existing_images = (data.images || []).map((img) => ({ image: img.image, caption: img.caption || "" }));
+			update.images = existing_images.concat([{ image: values.new_image }]);
+		}
+
+		frappe
+			.call({
+				method: "frappe.client.set_value",
+				args: { doctype: "Equipment Inspection", name: data.name, fieldname: update },
+			})
+			.then(() => {
+				frappe.show_alert({ message: __("Sheet {0} saved", [data.name]), indicator: "green" });
+				dialog.hide();
+				this.load_sheets();
+				this.load_summary();
+			})
+			.always(() => dialog.get_primary_btn().prop("disabled", false));
 	}
 };

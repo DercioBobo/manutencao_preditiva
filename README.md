@@ -120,14 +120,16 @@ table, all in one page.
   sheets table. (Quick Finding Entry's equivalent button is called "New
   Finding" instead - see below for why the two pages don't share that
   word.)
-- Clicking a sheet in the table navigates to its native Equipment
-  Inspection form - **on purpose**, not an inline dialog. That form already
-  auto-fills the readings table the moment you pick an equipment (see
-  `equipment_inspection.js`), and Quick Finding Entry already has its own
-  editing dialog; a third hand-built copy of that same UI here would be a
-  third thing to keep in sync with no bench to verify any of them against.
-  This page's job is the overview and the connections between the pieces,
-  not re-implementing data entry.
+- Clicking a sheet in the table opens it in a **Dialog right there** -
+  readings table, diagnosis, one new image, and the same "Override
+  suggested severity" checkbox Quick Finding Entry has. That editor is
+  adapted from Quick Finding Entry's (`registo_rapido_de_achados.js`), not
+  a fresh build, so this is still only the *second* editing surface in the
+  app, not a third: the native Equipment Inspection form, and this shared
+  Dialog pattern now used by two pages. The dialog has its own **Open Full
+  Form** link for anything it doesn't cover (multiple images, more detail).
+  A real side panel and a second full page were both considered and
+  rejected for this - see the file's header comment for why.
 
 Staff-only (System Manager / Tecnico de Inspecao) - not client-facing.
 

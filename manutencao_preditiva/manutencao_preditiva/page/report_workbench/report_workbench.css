@@ -222,6 +222,48 @@
 	white-space: pre-wrap;
 }
 
+/* ---- sheet editor dialog (readings table) --------------------------------- */
+
+.rw-readings {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.rw-readings th,
+.rw-readings td {
+	border-bottom: 1px solid var(--rw-line);
+	padding: 5px 6px;
+	text-align: left;
+}
+
+.rw-readings th {
+	color: var(--rw-muted);
+	font-weight: 600;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.rw-readings-point {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.rw-readings input[type="number"] {
+	width: 100%;
+	border: 1px solid var(--rw-line);
+	border-radius: 6px;
+	padding: 4px 6px;
+	font-size: 13px;
+}
+
+.rw-suggested-note {
+	color: var(--rw-muted);
+	font-size: 12px;
+	margin: 2px 0 10px;
+}
+
 /* ---- severity summary bar ------------------------------------------------ */
 
 .rw-summary-bar {

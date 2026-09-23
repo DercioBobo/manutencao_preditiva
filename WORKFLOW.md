@@ -127,11 +127,11 @@ portal, all reading the same sheets. Nothing entered twice.
   order didn't matter. If a new query hits this again, that's the fix.
 
 ### Known gaps (deliberate scope cuts, not bugs)
-- [ ] **Report Workbench never edits a sheet inline** - clicking one always
-  navigates to the native Equipment Inspection form (a deliberate choice,
-  see README). If that back-and-forth turns out to be annoying in
-  practice, an inline editor is the natural next step, reusing Quick
-  Finding Entry's readings-editor code as a starting point.
+- [ ] **Report Workbench's sheet dialog needs a click-through too** -
+  brand new (2026-09-23), adapted from Quick Finding Entry's editor but
+  never run. Same one-image-per-session limit as Quick Finding Entry (see
+  below) - "Open Full Form" inside the dialog is the way to anything it
+  doesn't cover.
 - [ ] **Quick Finding Entry: one image per edit session**, no multi-image
   gallery or captions there - full galleries need the native Equipment
   Inspection form.
