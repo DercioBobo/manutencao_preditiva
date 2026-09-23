@@ -123,9 +123,15 @@ summary, and every Equipment Inspection sheet in it, and edit any of them,
 all in one page.
 
 - **Recent Reports** table below the picker - search by customer/area/
-  period, filter by Draft/Issued, click a row to load it. **+ New Report**
-  opens a creation dialog (customer, area filtered by that customer, date,
-  team, instrument) instead of leaving the page.
+  period, filter by Draft/Issued/**Customer** (2026-09-23, since a report's
+  own free-text search dropped customer once its own filter existed), click
+  a row to load it. **+ New Report** opens a creation dialog (customer, area
+  filtered by that customer, date, team, instrument) instead of leaving the
+  page. **Collapses automatically once a report loads** (2026-09-23,
+  `toggle_recent()`) behind a "Show (N)" link - with many reports/customers
+  building up over time, a report you already picked shouldn't keep sharing
+  the screen with the picker used to find it; it re-expands on demand and
+  whenever a fresh report search is actually wanted.
 - Once a report is loaded: **Issue Report** / **Reopen to Draft** toggles
   its status (the same `validate_can_be_issued()` rule applies - every
   sheet needs a severity first), **Print Report** opens Frappe's native
@@ -167,6 +173,21 @@ all in one page.
   more detail). A real side panel and a second full page were both
   considered for this dialog and rejected - see the file's header comment
   for why.
+
+**One continuous panel, not three unrelated boxes** (2026-09-23, following
+"all seems like different sections.. doesn't feel like they belong to each
+other" feedback on the first version): the loaded report's header and its
+Equipment Sheets section render inside the *same* `.rw-card-featured`
+container, separated only by an internal hairline (`.rw-panel-divider`),
+so the sheets visually read as "part of this report" instead of a
+same-weight sibling card floating below it with no visual relationship to
+what's above. The picker/Recent Reports module stays deliberately separate
+and lighter-weight - see the collapsing behaviour above - since it's a
+different kind of thing (finding/creating a report, not the report itself).
+Implementation note: `render_report_header()` only ever empties/rebuilds
+its own sub-container (`$report_header_area`), never the shared
+`$report_card` itself, so re-rendering the header on every load or status
+toggle can't wipe out the sheets section nested alongside it.
 
 Staff-only (System Manager / Tecnico de Inspecao) - not client-facing.
 
@@ -257,6 +278,12 @@ not decoration.
 - **The severity summary is a gauge, not a progress bar** - a segmented
   bar with tick marks underneath (`.rw-summary-ticks`), read against a
   legend with monospace counts.
+- **Table/Cards toggle bug fixed (2026-09-23)** - `switch_sheets_view()`
+  only toggled which wrapper was visible, so Cards showed nothing unless it
+  happened to already be the view active the last time sheets were loaded
+  from the server. It now calls `render_sheets_view()` on every switch,
+  re-rendering from the already-loaded `sheet_rows` - no network round trip
+  needed, and the view is populated whichever button is clicked.
 - Table headers and section labels are **not ALL CAPS** - hierarchy comes
   from weight/size/colour instead; the one exception is the loaded
   report's own big status badge (`.rw-badge-lg`), which does use caps,
@@ -264,9 +291,42 @@ not decoration.
   deliberately used exactly once per screen, not as a repeated pattern.
 
 Native Frappe forms and dialogs (Equipment Inspection, Inspection Report,
-Print preview) are untouched - reskinning Frappe's own shared Desk chrome
-is a materially bigger, riskier undertaking than styling this app's own
-pages, and out of scope here.
+Print preview) are visually untouched - reskinning Frappe's own shared
+Desk chrome is a materially bigger, riskier undertaking than styling this
+app's own pages, and out of scope here. Two of them did gain new
+*functional* panels, though (2026-09-23) - see below - built with Frappe's
+own Bootstrap-ish classes (`table table-sm`, `text-muted`, the same inline
+severity-colour dots already used on the report's severity summary), not
+this app's own design system, so they read as native Frappe, on purpose.
+
+### Related-records panels on the native forms
+
+Neither of these existed until a técnico asked "shouldn't I see all of an
+equipment's past inspections from the equipment itself, and all of a
+report's equipment from the report?" - answered with the standard Frappe
+mechanism for the first ask, and a small embedded panel for the second,
+since "click Connections, then click again to see the list" fell short of
+actually seeing it on the form.
+
+- **Equipment** — every Equipment Inspection sheet ever done on it, across
+  every report (period, report, severity, status), newest first, right on
+  the form (`sb_history` section, `equipment.js`'s
+  `render_inspection_history()`). Click a row to open that sheet, click the
+  report name to open that report. Also has a standard Frappe **Connections**
+  entry ("Inspections") for filtering/sorting on more fields than this
+  panel shows.
+- **Inspection Report** — every sheet in *this* report (equipment,
+  severity, status, a defects preview), right on the form
+  (`sb_sheets` section, `inspection_report.js`'s `render_sheets_panel()`),
+  refreshed after **Create Equipment Sheets** the same way the severity
+  summary above it already was. Already had a Connections entry ("Sheets")
+  from the very first pass of this rebuild - this panel is the "see it
+  without an extra click" version of the same thing.
+
+Both re-query live (`frappe.client.get_list`) rather than relying on
+`onload` data, so a técnico switching between the report/equipment and
+adding sheets elsewhere sees it reflected on refresh, not just after a
+full reload.
 
 ### Workspaces
 

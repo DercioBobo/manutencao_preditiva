@@ -13,6 +13,18 @@
 // equipment-picker + readings/diagnosis/gallery editor were the starting
 // point for this page's own (see render_sheets_card()/open_sheet_dialog()).
 //
+// Structure (2026-09-23 revision, after "this reads as unrelated boxes"
+// feedback on the first version): the loaded report and its equipment
+// sheets are ONE continuous panel (render_sheets_card() appends into
+// render_report_card()'s own container, not a sibling card), so it reads
+// as "this report, and everything in it" rather than two same-weight
+// boxes with no visual relationship. The picker/Recent Reports above it
+// is deliberately a separate, lighter module - finding/switching reports
+// is a different task from working on the one that's loaded - and
+// auto-collapses once a report loads (see load_report()) so it doesn't
+// keep competing for attention, which also keeps it usable once there are
+// many customers' reports in it, not just the one being worked on.
+//
 // Clicking a sheet opens it in a Dialog right here, not a page navigation -
 // so there's still only ONE editing surface for a sheet's technical
 // content, not two: the native Equipment Inspection form (full-featured,
@@ -79,6 +91,12 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.recent_rows = [];
 		this.recent_status_filter = "all";
 		this.recent_search = "";
+		this.recent_customer_filter = "";
+		// Collapsed automatically once a report is loaded (see load_report())
+		// so the loaded report - not a growing table of every other one - is
+		// clearly the thing in focus. Starts expanded: that's the only way to
+		// find a report before one is loaded.
+		this.recent_expanded = true;
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
@@ -125,16 +143,45 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$new_btn.on("click", () => this.open_new_report_dialog());
 
 		const $recent_toolbar = $('<div class="rw-recent-toolbar">').appendTo($card);
-		$(`<div class="rw-recent-title">${__("Recent Reports")}</div>`).appendTo($recent_toolbar);
+		this.$recent_title = $(`<div class="rw-recent-title">${__("Recent Reports")}</div>`).appendTo($recent_toolbar);
+		this.$recent_toggle = $(`<a href="#" class="rw-recent-toggle"></a>`).appendTo($recent_toolbar);
+		this.$recent_toggle.on("click", (e) => {
+			e.preventDefault();
+			this.toggle_recent(!this.recent_expanded);
+		});
 
-		const $filters = $('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">').appendTo($recent_toolbar);
+		// Everything below the toolbar collapses as one unit - see
+		// toggle_recent(). A growing customer/report count is exactly why
+		// this exists: browsing is opt-in once you're not looking for one.
+		this.$recent_body = $("<div>").appendTo($card);
+
+		const $filters = $('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">').appendTo(
+			this.$recent_body
+		);
 		this.$recent_search = $(
-			`<input type="text" class="rw-search" placeholder="${__("Search customer, area, period...")}">`
+			`<input type="text" class="rw-search" placeholder="${__("Search area, period...")}">`
 		).appendTo($filters);
 		this.$recent_search.on("input", () => {
 			this.recent_search = (this.$recent_search.val() || "").toLowerCase().trim();
 			this.render_recent_table();
 		});
+
+		const $customer_wrap = $('<div class="rw-field" style="min-width:200px">').appendTo($filters);
+		this.recent_customer_control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Link",
+				fieldname: "recent_customer",
+				placeholder: __("Customer"),
+				options: "Customer",
+				onchange: () => {
+					this.recent_customer_filter = this.recent_customer_control.get_value();
+					this.render_recent_table();
+				},
+			},
+			parent: $customer_wrap[0],
+			render_input: true,
+		});
+		this.recent_customer_control.refresh();
 
 		this.$recent_chips = $('<div class="rw-chips">').appendTo($filters);
 		[
@@ -152,7 +199,15 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			});
 		});
 
-		this.$recent_table_wrap = $('<div class="rw-table-wrap">').appendTo($card);
+		this.$recent_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$recent_body);
+
+		this.toggle_recent(true);
+	}
+
+	toggle_recent(expanded) {
+		this.recent_expanded = expanded;
+		this.$recent_body.toggle(expanded);
+		this.$recent_toggle.text(expanded ? __("Hide") : __("Show ({0})", [this.recent_rows.length]));
 	}
 
 	load_recent_reports() {
@@ -171,14 +226,16 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			.then((r) => {
 				this.recent_rows = r.message || [];
 				this.render_recent_table();
+				this.toggle_recent(this.recent_expanded); // refresh the "Show (N)" count
 			});
 	}
 
 	render_recent_table() {
 		const rows = this.recent_rows.filter((row) => {
 			if (this.recent_status_filter !== "all" && row.status !== this.recent_status_filter) return false;
+			if (this.recent_customer_filter && row.customer !== this.recent_customer_filter) return false;
 			if (!this.recent_search) return true;
-			const haystack = [row.customer, row.area_name, row.period_label].filter(Boolean).join(" ").toLowerCase();
+			const haystack = [row.area_name, row.period_label].filter(Boolean).join(" ").toLowerCase();
 			return haystack.includes(this.recent_search);
 		});
 
@@ -275,6 +332,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 						doc.area_name = (area_r.message && area_r.message.area_name) || doc.area;
 						this.report_doc = doc;
 						this.$workbench.show();
+						this.toggle_recent(false); // the loaded report is the focus now, not the picker
 						this.render_report_header();
 						this.load_summary();
 						this.load_sheets();
@@ -286,15 +344,21 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 
 	render_report_card() {
 		// The one panel per screen that gets real elevation - see the CSS
-		// file header for why the rest of the page stays hairline-flat.
+		// file header for why the rest of the page stays hairline-flat. Its
+		// own sub-container (not $report_card directly) is what
+		// render_report_header() clears and rebuilds on every report
+		// load/status toggle - render_sheets_card() appends its own
+		// sub-container as a sibling of this one, so re-rendering the header
+		// never wipes out the sheets section nested in the same panel.
 		this.$report_card = $('<div class="rw-card rw-card-featured">').appendTo(this.$workbench);
+		this.$report_header_area = $("<div>").appendTo(this.$report_card);
 	}
 
 	render_report_header() {
 		const doc = this.report_doc;
-		this.$report_card.empty();
+		this.$report_header_area.empty();
 
-		const $head = $('<div class="rw-report-head">').appendTo(this.$report_card);
+		const $head = $('<div class="rw-report-head">').appendTo(this.$report_header_area);
 		const $title_wrap = $("<div>").appendTo($head);
 		$(
 			`<div class="rw-report-title">${frappe.utils.escape_html(doc.customer)} — ${frappe.utils.escape_html(
@@ -311,12 +375,12 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		$('<div class="rw-badge-lg">').html(rw_badge(doc.status, RW_REPORT_STATUS_HEX[doc.status])).appendTo($head);
 
 		if (doc.notes) {
-			$('<div class="rw-notes">').text(doc.notes).appendTo(this.$report_card);
+			$('<div class="rw-notes">').text(doc.notes).appendTo(this.$report_header_area);
 		}
 
-		this.$summary_wrap = $("<div>").appendTo(this.$report_card);
+		this.$summary_wrap = $("<div>").appendTo(this.$report_header_area);
 
-		const $actions = $('<div class="rw-toolbar" style="margin-top:14px">').appendTo(this.$report_card);
+		const $actions = $('<div class="rw-toolbar" style="margin-top:14px">').appendTo(this.$report_header_area);
 
 		this.$toggle_status_btn = $(`<button class="rw-btn"></button>`).appendTo($actions);
 		this.$toggle_status_btn.text(doc.status === "Draft" ? __("Issue Report") : __("Reopen to Draft"));
@@ -390,7 +454,11 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 	// ---- sheets: every equipment covered by this report ------------------------
 
 	render_sheets_card() {
-		this.$sheets_card = $('<div class="rw-card">').appendTo(this.$workbench);
+		// Appended INSIDE the featured report panel, not a sibling card - see
+		// the file header comment: one continuous panel for "this report and
+		// everything in it", not a separate box with no visual relationship
+		// to the report above it.
+		this.$sheets_card = $('<div class="rw-panel-divider">').appendTo(this.$report_card);
 		const $toolbar = $('<div class="rw-toolbar" style="justify-content:space-between;margin-bottom:14px">').appendTo(
 			this.$sheets_card
 		);
@@ -458,6 +526,12 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$sheets_table_btn.toggleClass("active", !is_cards);
 		this.$sheets_cards_wrap.toggle(is_cards);
 		this.$sheets_table_wrap.toggle(!is_cards);
+		// Bug fixed 2026-09-23: this used to only toggle visibility - Cards
+		// was never actually rendered unless it happened to be the view
+		// active at the last load_sheets(), so switching to it showed an
+		// empty container. render_sheets_view() re-renders from the
+		// already-loaded this.sheet_rows, no network call needed.
+		this.render_sheets_view();
 	}
 
 	load_sheets() {

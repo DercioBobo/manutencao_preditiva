@@ -53,6 +53,16 @@
 	padding-top: 17px;
 }
 
+/* Separates the report header from the Equipment Sheets section nested
+ * inside the SAME panel (see report_workbench.js's render_sheets_card()) -
+ * one continuous "this report and everything in it", not a second card
+ * with no visual relationship to the first. */
+.rw-panel-divider {
+	border-top: 1px solid var(--rw-line);
+	margin-top: 22px;
+	padding-top: 20px;
+}
+
 /* ---- picker: pick/create a report ---------------------------------------- */
 
 .rw-picker-row {
@@ -79,6 +89,21 @@
 	font-weight: 600;
 	color: var(--rw-muted);
 	font-size: 12.5px;
+}
+
+/* Hide/Show (N) link that collapses Recent Reports once a report is
+ * loaded - see report_workbench.js's toggle_recent(). Kept small and
+ * quiet: it's a secondary control over a module that's deliberately
+ * lighter-weight than the featured report panel. */
+.rw-recent-toggle {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--rw-accent-ink);
+	cursor: pointer;
+	user-select: none;
+}
+.rw-recent-toggle:hover {
+	text-decoration: underline;
 }
 
 .rw-chips {

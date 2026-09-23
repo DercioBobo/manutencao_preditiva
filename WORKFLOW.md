@@ -114,6 +114,16 @@ portal, all reading the same sheets. Nothing entered twice.
   chrome around it, the Google Fonts import actually loading, wide/narrow
   window behaviour - isn't. See README's "Visual design" section for what
   changed and why.
+- [x] ~~Report Workbench reads as unrelated sections; Cards view shows
+  nothing.~~ Fixed 2026-09-23, from real feedback on a live-bench
+  screenshot: the report header and Equipment Sheets are now one merged
+  panel (`.rw-panel-divider` inside `.rw-card-featured`, not a sibling
+  card), Recent Reports auto-collapses once a report loads (with a Customer
+  filter added for when there are many reports/customers to search
+  through), and `switch_sheets_view()` now actually renders Cards instead
+  of just toggling an empty container's visibility. Re-verified with a
+  headless-Chrome screenshot of the merged layout; still needs the same
+  real-bench click-through as everything else in this section.
 - [ ] **Print format unverified in real wkhtmltopdf.** Only rendered
   through PyMuPDF as an approximation. Check page breaks, image sizing,
   and the pie chart at real print resolution.
@@ -130,6 +140,14 @@ portal, all reading the same sheets. Nothing entered twice.
   2026-09-23 - the sequential-insert loop in particular), New Sheet, the
   sheet editor dialog (readings, gallery), search/chips/Cards view, and
   Print Report are otherwise still unverified against the real bench.
+- [ ] **The two new native-form panels (2026-09-23) need a real look too**
+  - Equipment's Inspection History and Inspection Report's Equipment
+    Sheets (`equipment.js`/`inspection_report.js`). Straightforward
+    `get_list` + a hand-built table, same pattern proven elsewhere, but
+    never rendered inside an actual Frappe form - worth confirming the
+    HTML field's placement/section behaves as expected and the click
+    handlers survive a real `refresh()` cycle (re-bound every time, not
+    just once, since the whole wrapper is replaced on each call).
 - [ ] **The Issue-lock (2026-09-23) needs a real save, not just the mock
   test.** `test_equipment_inspection_lock.py` covers the logic against a
   fake frappe (7 scenarios, all passing - see README), but nothing has
