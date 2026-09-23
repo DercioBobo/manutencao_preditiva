@@ -34,39 +34,21 @@ const MA_PAGE_SIZE = 50;
 const MA_SEVERITY_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
 const MA_STATUS_OPTIONS = ["Open", "In Progress", "Done", "Not Applicable"];
 
-const MA_SEVERITY_BADGE = {
-	Critical: "ma-badge-critico",
-	Alarm: "ma-badge-alarme",
-	Acceptable: "ma-badge-aceitavel",
-	Normal: "ma-badge-boa-condicao",
-	"Not Collected": "ma-badge-nao-recolhido",
-};
-
-const MA_STATUS_BADGE = {
-	Open: "ma-badge-pendente",
-	"In Progress": "ma-badge-em-curso",
-	Done: "ma-badge-concluido",
-	"Not Applicable": "ma-badge-na",
-};
-
-// Same hex values as the CSS custom properties above - frappe.Chart needs
-// literal colors, it can't read CSS variables. Kept identical to the badge
-// colors on purpose: severity/status already have an established meaning
-// in this app (the card badges), so the charts reuse it rather than a
-// fresh categorical palette.
+// Same values as Report Workbench's - one severity/status colour language
+// across the whole app, not a per-page palette.
 const MA_SEVERITY_HEX = {
-	Critical: "#c4453a",
-	Alarm: "#d99226",
-	Acceptable: "#b8a021",
-	Normal: "#3a9d5b",
-	"Not Collected": "#6b7680",
+	Critical: "#c43b3b",
+	Alarm: "#d97b29",
+	Acceptable: "#b8960c",
+	Normal: "#2e8b57",
+	"Not Collected": "#8a94a0",
 };
 
 const MA_STATUS_HEX = {
-	Open: "#d99226",
-	"In Progress": "#2b6cb0",
-	Done: "#3a9d5b",
-	"Not Applicable": "#6b7680",
+	Open: "#b8960c",
+	"In Progress": "#2b6ca8",
+	Done: "#2e8b57",
+	"Not Applicable": "#8a94a0",
 };
 
 function hex_to_rgba(hex, alpha) {
@@ -74,6 +56,16 @@ function hex_to_rgba(hex, alpha) {
 	const g = parseInt(hex.slice(3, 5), 16);
 	const b = parseInt(hex.slice(5, 7), 16);
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// An indicator light + label, not a filled pill - see meus_achados.css for
+// why (the app models real alarm/status signal, not decoration).
+function ma_badge(text, color) {
+	if (!text) return "";
+	return (
+		`<span class="ma-badge"><span class="ma-badge-dot" style="background:${color || "#8a94a0"}"></span>` +
+		`${frappe.utils.escape_html(text)}</span>`
+	);
 }
 
 manutencao_preditiva.MeusAchados = class MeusAchados {
@@ -842,7 +834,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		const parts = [`<span class="ma-summary-total">${this.entries.length} ${__("findings")}</span>`];
 		MA_STATUS_OPTIONS.forEach((status) => {
 			if (counts[status]) {
-				parts.push(`<span class="ma-badge ${MA_STATUS_BADGE[status]}">${counts[status]} ${status}</span>`);
+				parts.push(ma_badge(`${counts[status]} ${status}`, MA_STATUS_HEX[status]));
 			}
 		});
 		this.$summary.html(parts.join(""));
@@ -918,15 +910,13 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	build_card(entry) {
 		const row = entry.data;
-		const sev_class = MA_SEVERITY_BADGE[row.severity] || "ma-badge-nao-recolhido";
-		const status_class = MA_STATUS_BADGE[row.action_status] || "ma-badge-pendente";
 
 		const $card = $('<div class="ma-card">');
 		const $row = $('<div class="ma-row">').appendTo($card);
 
 		const $badges = $('<div class="ma-badges">').appendTo($row);
-		$(`<span class="ma-badge ${sev_class}">`).text(row.severity || "").appendTo($badges);
-		$(`<span class="ma-badge ${status_class}">`).text(row.action_status || __("Open")).appendTo($badges);
+		$badges.append(ma_badge(row.severity, MA_SEVERITY_HEX[row.severity]));
+		$badges.append(ma_badge(row.action_status || __("Open"), MA_STATUS_HEX[row.action_status]));
 
 		const $main = $('<div class="ma-main">').appendTo($row);
 		const $title = $('<div class="ma-title">').text(row.equipment_description || row.equipment || "").appendTo($main);
@@ -1110,12 +1100,9 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			columns.forEach((col) => {
 				const $td = $("<td>").appendTo($tr);
 				if (col.field === "severity") {
-					const cls = MA_SEVERITY_BADGE[row.severity] || "ma-badge-nao-recolhido";
-					$(`<span class="ma-badge ${cls}">`).text(row.severity || "").appendTo($td);
+					$td.html(ma_badge(row.severity, MA_SEVERITY_HEX[row.severity]));
 				} else if (col.field === "action_status") {
-					const status = row.action_status || __("Open");
-					const cls = MA_STATUS_BADGE[row.action_status] || "ma-badge-pendente";
-					$(`<span class="ma-badge ${cls}">`).text(status).appendTo($td);
+					$td.html(ma_badge(row.action_status || __("Open"), MA_STATUS_HEX[row.action_status]));
 				} else if (col.field === "creation") {
 					$td.html(comment_when(row.creation));
 				} else {
@@ -1129,7 +1116,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// ---- detail + response dialog -----------------------------------------------
 
 	build_summary_html(data) {
-		const rows = [[__("Severity"), `<span class="ma-badge ${MA_SEVERITY_BADGE[data.severity] || "ma-badge-nao-recolhido"}">${frappe.utils.escape_html(data.severity || "")}</span>`]];
+		const rows = [[__("Severity"), ma_badge(data.severity, MA_SEVERITY_HEX[data.severity])]];
 
 		rows.push([__("Equipment"), frappe.utils.escape_html(data.equipment_description || data.equipment || "")]);
 		rows.push([__("Area / Plant"), frappe.utils.escape_html(data.area_name || data.area || "")]);

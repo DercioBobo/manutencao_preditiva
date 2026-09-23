@@ -212,6 +212,50 @@ set), not one, and there's no cheap way to bring back "the first one" for
 the list without a query per row. In exchange, the detail dialog now shows
 the equipment's readings table (point, mm/s, g's, temp.).
 
+### Visual design
+
+Report Workbench and My Findings share one deliberate visual identity
+(2026-09-23) - an "instrument panel" for condition monitoring, not a
+generic SaaS dashboard: this app replaces printed, severity-coded
+inspection reports, so severity/status colour is treated as real signal,
+not decoration.
+
+- **Type:** IBM Plex Sans for everything read as prose/UI chrome, IBM Plex
+  Mono for anything read as data - readings, dates/periods, IDs, badge
+  text, stat-tile numbers. Loaded via a Google Fonts `@import` at the top
+  of each page's CSS, with a system-font fallback stack if it's blocked.
+- **Colour:** a cool graphite/slate neutral palette (not the warm-cream or
+  near-black-plus-acid-accent look generic AI output defaults to), one
+  teal accent spent only on primary actions and focus states, and the
+  severity/status colours - refined but still meaningfully close to the
+  original report's green/amber/orange/red - shared as literal hex
+  constants between `report_workbench.js` and `meus_achados.js` (no CSS
+  variable, since `frappe.Chart` and inline SVG both need real values).
+- **Badges are an indicator light + label** (`rw_badge()`/`ma_badge()`),
+  not a filled pill - a small dot in the severity/status colour next to
+  plain text, closer to a physical panel's status light than a generic
+  SaaS tag.
+- **Only one panel per screen gets real elevation and shadow** - the
+  loaded report on Report Workbench (`.rw-card-featured`, with a teal top
+  edge). Everything else - the sheets list, the recent-reports table, My
+  Findings' stat tiles - is hairline-bordered and flat, so that one panel
+  actually reads as "the thing in focus" instead of every section looking
+  identically boxed (the generic "SaaS card kit" look this was built to
+  avoid).
+- **The severity summary is a gauge, not a progress bar** - a segmented
+  bar with tick marks underneath (`.rw-summary-ticks`), read against a
+  legend with monospace counts.
+- Table headers and section labels are **not ALL CAPS** - hierarchy comes
+  from weight/size/colour instead; the one exception is the loaded
+  report's own big status badge (`.rw-badge-lg`), which does use caps,
+  matching how a real alarm panel labels its state (ARMED, FAULT, ...) -
+  deliberately used exactly once per screen, not as a repeated pattern.
+
+Native Frappe forms and dialogs (Equipment Inspection, Inspection Report,
+Print preview) are untouched - reskinning Frappe's own shared Desk chrome
+is a materially bigger, riskier undertaking than styling this app's own
+pages, and out of scope here.
+
 ### Workspaces
 
 Two Workspaces (visible per the user's role, via `roles`):

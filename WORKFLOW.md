@@ -106,6 +106,13 @@ portal, all reading the same sheets. Nothing entered twice.
 - [x] ~~Never run against a live bench.~~ Now running on one (Frappe
   15.106.0 / ERPNext 15.105.0) - do the full walkthrough above, one small
   test report start to finish, before a real client visit.
+- [ ] **New visual design (2026-09-23) needs a real-browser check.**
+  Verified with headless Chrome screenshots of a static mockup using the
+  actual CSS files (not the live Frappe page - Frappe wasn't running), so
+  the component-level look is confirmed but the *real* page - Frappe's own
+  chrome around it, the Google Fonts import actually loading, wide/narrow
+  window behaviour - isn't. See README's "Visual design" section for what
+  changed and why.
 - [ ] **Print format unverified in real wkhtmltopdf.** Only rendered
   through PyMuPDF as an approximation. Check page breaks, image sizing,
   and the pie chart at real print resolution.

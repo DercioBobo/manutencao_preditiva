@@ -1,18 +1,37 @@
+/* Design language: an engineering instrument panel, not a generic SaaS
+ * dashboard - this app replaces printed condition-monitoring reports
+ * (alarm tables, severity-coded readings), so severity/status colour is
+ * treated as instrument signal, not decoration; numeric/data values get a
+ * monospace face (an instrument readout), everything else stays a plain
+ * grotesk; only ONE panel per screen gets real elevation (the loaded
+ * report), the rest is hairline-separated rather than boxed-and-shadowed.
+ * See WORKFLOW.md/README.md for the "why" behind specific choices.
+ */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
 .rw {
-	--rw-ink: #1c2b36;
-	--rw-muted: #6b7680;
-	--rw-line: #e3e8eb;
+	--rw-ink: #12181f;
+	--rw-muted: #5b6b78;
+	--rw-line: #dbe2e7;
+	--rw-line-strong: #b7c2ca;
 	--rw-surface: #ffffff;
-	--rw-surface-2: #f7f9fa;
-	--rw-accent: #14877e;
-	--rw-radius: 12px;
-	--rw-shadow: 0 1px 2px rgba(20, 30, 38, 0.05), 0 4px 14px rgba(20, 30, 38, 0.04);
+	--rw-surface-2: #eef2f5;
+	--rw-accent: #0e7c86;
+	--rw-accent-ink: #0a5a61;
+	--rw-accent-wash: #e2f0f1;
+	--rw-radius: 10px;
+	--rw-radius-sm: 6px;
+	--rw-shadow: 0 1px 2px rgba(18, 24, 31, 0.05), 0 16px 32px -16px rgba(18, 24, 31, 0.22);
+	--rw-font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+	--rw-font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
 
 	max-width: 1080px;
 	margin: 0 auto;
-	padding: 4px 4px 80px;
+	padding: 12px 4px 80px;
 	color: var(--rw-ink);
-	font-size: 13px;
+	font-family: var(--rw-font-sans);
+	font-size: 13.5px;
+	background: var(--rw-surface-2);
 }
 
 .rw * {
@@ -23,9 +42,15 @@
 	background: var(--rw-surface);
 	border: 1px solid var(--rw-line);
 	border-radius: var(--rw-radius);
-	box-shadow: var(--rw-shadow);
-	padding: 16px 20px;
+	padding: 18px 22px;
 	margin-bottom: 20px;
+}
+
+/* The one card per screen that carries real weight - the loaded report. */
+.rw-card-featured {
+	box-shadow: var(--rw-shadow);
+	border-top: 3px solid var(--rw-accent);
+	padding-top: 17px;
 }
 
 /* ---- picker: pick/create a report ---------------------------------------- */
@@ -45,15 +70,15 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin: 18px 0 10px;
+	margin: 22px 0 12px;
+	flex-wrap: wrap;
+	gap: 10px;
 }
 
 .rw-recent-title {
 	font-weight: 600;
 	color: var(--rw-muted);
-	font-size: 12px;
-	text-transform: uppercase;
-	letter-spacing: 0.02em;
+	font-size: 12.5px;
 }
 
 .rw-chips {
@@ -63,13 +88,20 @@
 }
 
 .rw-chip {
-	border: 1px solid var(--rw-line);
+	font-family: var(--rw-font-sans);
+	border: 1px solid var(--rw-line-strong);
 	background: var(--rw-surface);
 	border-radius: 20px;
-	padding: 3px 12px;
+	padding: 4px 13px;
 	font-size: 12px;
 	cursor: pointer;
 	color: var(--rw-muted);
+	transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.rw-chip:hover {
+	border-color: var(--rw-accent);
+	color: var(--rw-ink);
 }
 
 .rw-chip.active {
@@ -79,26 +111,40 @@
 }
 
 .rw-search {
-	border: 1px solid var(--rw-line);
-	border-radius: 8px;
-	padding: 6px 10px;
+	font-family: var(--rw-font-sans);
+	border: 1px solid var(--rw-line-strong);
+	border-radius: var(--rw-radius-sm);
+	padding: 7px 11px;
 	font-size: 13px;
 	min-width: 220px;
+	background: var(--rw-surface);
+	color: var(--rw-ink);
+	transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rw-search:focus {
+	outline: none;
+	border-color: var(--rw-accent);
+	box-shadow: 0 0 0 3px var(--rw-accent-wash);
 }
 
 /* ---- buttons -------------------------------------------------------------- */
 
 .rw-btn {
-	border: 1px solid var(--rw-line);
+	font-family: var(--rw-font-sans);
+	border: 1px solid var(--rw-line-strong);
 	background: var(--rw-surface);
-	border-radius: 8px;
-	padding: 7px 14px;
+	border-radius: var(--rw-radius-sm);
+	padding: 7px 15px;
 	font-size: 13px;
+	font-weight: 500;
 	cursor: pointer;
 	color: var(--rw-ink);
+	transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .rw-btn:hover {
+	border-color: var(--rw-muted);
 	background: var(--rw-surface-2);
 }
 
@@ -114,7 +160,8 @@
 }
 
 .rw-btn-primary:hover {
-	background: #106e66;
+	background: var(--rw-accent-ink);
+	border-color: var(--rw-accent-ink);
 }
 
 .rw-toolbar {
@@ -132,18 +179,21 @@
 }
 
 .rw-view-btn {
-	border: 1px solid var(--rw-line);
+	font-family: var(--rw-font-sans);
+	border: 1px solid var(--rw-line-strong);
 	background: var(--rw-surface);
 	color: var(--rw-muted);
-	border-radius: 8px;
+	border-radius: var(--rw-radius-sm);
 	padding: 6px 14px;
 	font-size: 12px;
 	font-weight: 600;
 	cursor: pointer;
+	transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 
 .rw-view-btn:hover {
-	background: var(--rw-surface-2);
+	border-color: var(--rw-accent);
+	color: var(--rw-ink);
 }
 
 .rw-view-btn.active {
@@ -152,32 +202,33 @@
 	color: #fff;
 }
 
-/* ---- sheet cards (Cards view) ---------------------------------------------- */
+/* ---- sheet cards (Cards view) - hairline-separated, not stacked shadow
+ * boxes: a single bordered strip with a 1px background gap between rows,
+ * so only the featured report panel above carries real elevation. ------- */
 
 .rw-sheet-cards {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-}
-
-.rw-sheet-card {
-	background: var(--rw-surface);
+	gap: 1px;
+	background: var(--rw-line);
 	border: 1px solid var(--rw-line);
 	border-radius: var(--rw-radius);
-	box-shadow: var(--rw-shadow);
+	overflow: hidden;
 }
 
 .rw-sheet-card-row {
 	display: flex;
 	align-items: center;
 	gap: 14px;
-	padding: 12px 18px;
+	padding: 13px 18px;
 	flex-wrap: wrap;
 	cursor: pointer;
+	background: var(--rw-surface);
+	transition: background 0.1s ease;
 }
 
 .rw-sheet-card-row:hover {
-	background: var(--rw-surface-2);
+	background: var(--rw-accent-wash);
 }
 
 .rw-sheet-card-main {
@@ -210,7 +261,8 @@
 	align-items: center;
 	gap: 10px;
 	color: var(--rw-muted);
-	font-size: 12px;
+	font-family: var(--rw-font-mono);
+	font-size: 11px;
 	flex: 0 0 auto;
 }
 
@@ -225,12 +277,12 @@
 .rw-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 13px;
+	font-size: 13.5px;
 }
 
 .rw-table th,
 .rw-table td {
-	padding: 8px 12px;
+	padding: 10px 14px;
 	text-align: left;
 	border-bottom: 1px solid var(--rw-line);
 	white-space: nowrap;
@@ -239,18 +291,17 @@
 .rw-table th {
 	color: var(--rw-muted);
 	font-weight: 600;
-	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.02em;
+	font-size: 11.5px;
 	background: var(--rw-surface-2);
 }
 
 .rw-table tbody tr {
 	cursor: pointer;
+	transition: background 0.1s ease;
 }
 
 .rw-table tbody tr:hover {
-	background: var(--rw-surface-2);
+	background: var(--rw-accent-wash);
 }
 
 .rw-table tbody tr:last-child td {
@@ -264,21 +315,43 @@
 	white-space: nowrap;
 }
 
-/* ---- badges ------------------------------------------------------------ */
+/* Dates, IDs, periods - anything read as data rather than prose. */
+.rw-table td.rw-mono {
+	font-family: var(--rw-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---- badges: an indicator light + label, not a filled pill -------------- */
 
 .rw-badge {
-	display: inline-block;
-	padding: 2px 9px;
-	border-radius: 20px;
-	font-size: 11px;
-	font-weight: 700;
-	color: #fff;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-family: var(--rw-font-mono);
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--rw-ink);
 	white-space: nowrap;
 }
 
-.rw-badge-muted {
-	background: var(--rw-muted);
-	color: #fff;
+.rw-badge-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+	box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* The one emphasised badge per screen - the loaded report's own status. */
+.rw-badge-lg .rw-badge {
+	font-size: 13px;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+.rw-badge-lg .rw-badge-dot {
+	width: 10px;
+	height: 10px;
 }
 
 /* ---- report header ------------------------------------------------------- */
@@ -289,26 +362,32 @@
 	align-items: flex-start;
 	gap: 16px;
 	flex-wrap: wrap;
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--rw-line);
+	margin-bottom: 16px;
 }
 
 .rw-report-title {
-	font-size: 16px;
-	font-weight: 700;
+	font-size: 19px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
 }
 
 .rw-report-meta {
 	color: var(--rw-muted);
+	font-family: var(--rw-font-mono);
 	font-size: 12px;
-	margin-top: 4px;
+	margin-top: 5px;
 }
 
 .rw-report-meta span + span::before {
-	content: " · ";
+	content: "  /  ";
+	color: var(--rw-line-strong);
 }
 
 .rw-notes {
 	margin-top: 10px;
-	font-size: 12px;
+	font-size: 12.5px;
 	color: var(--rw-muted);
 	white-space: pre-wrap;
 }
@@ -318,22 +397,25 @@
 .rw-readings {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 12px;
-}
-
-.rw-readings th,
-.rw-readings td {
-	border-bottom: 1px solid var(--rw-line);
-	padding: 5px 6px;
-	text-align: left;
+	font-size: 12.5px;
 }
 
 .rw-readings th {
 	color: var(--rw-muted);
 	font-weight: 600;
 	font-size: 11px;
-	text-transform: uppercase;
-	letter-spacing: 0.02em;
+	border-bottom: 1px solid var(--rw-line-strong);
+	padding: 0 6px 7px;
+	text-align: right;
+}
+
+.rw-readings th:first-child {
+	text-align: left;
+}
+
+.rw-readings td {
+	border-bottom: 1px solid var(--rw-line);
+	padding: 6px;
 }
 
 .rw-readings-point {
@@ -343,10 +425,19 @@
 
 .rw-readings input[type="number"] {
 	width: 100%;
-	border: 1px solid var(--rw-line);
-	border-radius: 6px;
-	padding: 4px 6px;
+	font-family: var(--rw-font-mono);
+	text-align: right;
+	border: 1px solid var(--rw-line-strong);
+	border-radius: var(--rw-radius-sm);
+	padding: 5px 8px;
 	font-size: 13px;
+	transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rw-readings input[type="number"]:focus {
+	outline: none;
+	border-color: var(--rw-accent);
+	box-shadow: 0 0 0 3px var(--rw-accent-wash);
 }
 
 .rw-suggested-note {
@@ -373,7 +464,7 @@
 	width: 140px;
 	height: 100px;
 	object-fit: cover;
-	border-radius: 8px;
+	border-radius: var(--rw-radius-sm);
 	border: 1px solid var(--rw-line);
 	cursor: pointer;
 	display: block;
@@ -382,9 +473,10 @@
 .rw-gallery-caption {
 	width: 100%;
 	margin-top: 4px;
-	border: 1px solid var(--rw-line);
-	border-radius: 6px;
-	padding: 4px 6px;
+	font-family: var(--rw-font-sans);
+	border: 1px solid var(--rw-line-strong);
+	border-radius: var(--rw-radius-sm);
+	padding: 4px 7px;
 	font-size: 12px;
 }
 
@@ -409,25 +501,49 @@
 	max-width: 260px;
 }
 
-/* ---- severity summary bar ------------------------------------------------ */
+/* ---- severity meter: a gauge with tick marks, not a flat progress bar --- */
 
 .rw-summary-bar {
 	display: flex;
-	border-radius: 8px;
+	border-radius: 4px;
 	overflow: hidden;
-	height: 10px;
-	margin: 14px 0 8px;
+	height: 20px;
+	margin-top: 4px;
+	border: 1px solid var(--rw-line-strong);
 	background: var(--rw-surface-2);
 }
 
 .rw-summary-seg {
 	height: 100%;
+	position: relative;
+}
+
+.rw-summary-seg + .rw-summary-seg::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: rgba(255, 255, 255, 0.45);
+}
+
+.rw-summary-ticks {
+	height: 5px;
+	margin: 3px 0 10px;
+	background-image: repeating-linear-gradient(
+		to right,
+		var(--rw-line-strong) 0,
+		var(--rw-line-strong) 1px,
+		transparent 1px,
+		transparent 10%
+	);
 }
 
 .rw-summary-legend {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 14px;
+	gap: 16px;
 	font-size: 12px;
 	color: var(--rw-muted);
 }
@@ -438,11 +554,18 @@
 	gap: 6px;
 }
 
+.rw-summary-legend-item .rw-summary-value {
+	font-family: var(--rw-font-mono);
+	color: var(--rw-ink);
+	font-weight: 600;
+}
+
 .rw-summary-dot {
-	width: 9px;
-	height: 9px;
+	width: 8px;
+	height: 8px;
 	border-radius: 50%;
 	display: inline-block;
+	box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.25);
 }
 
 /* ---- empty state --------------------------------------------------------- */
@@ -452,7 +575,7 @@
 	color: var(--rw-muted);
 	font-size: 13px;
 	padding: 36px 20px;
-	border: 1px dashed var(--rw-line);
+	border: 1px dashed var(--rw-line-strong);
 	border-radius: var(--rw-radius);
 }
 

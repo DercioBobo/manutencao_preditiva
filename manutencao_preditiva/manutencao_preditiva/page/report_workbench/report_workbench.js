@@ -41,25 +41,30 @@ frappe.pages["report-workbench"].on_page_show = function (wrapper) {
 const RW_SEVERITY_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
 
 const RW_SEVERITY_HEX = {
-	Critical: "#c4453a",
-	Alarm: "#d99226",
-	Acceptable: "#b8a021",
-	Normal: "#3a9d5b",
-	"Not Collected": "#6b7680",
+	Critical: "#c43b3b",
+	Alarm: "#d97b29",
+	Acceptable: "#b8960c",
+	Normal: "#2e8b57",
+	"Not Collected": "#8a94a0",
 };
 
 const RW_STATUS_HEX = {
-	Open: "#d99226",
-	"In Progress": "#2b6cb0",
-	Done: "#3a9d5b",
-	"Not Applicable": "#6b7680",
+	Open: "#b8960c",
+	"In Progress": "#2b6ca8",
+	Done: "#2e8b57",
+	"Not Applicable": "#8a94a0",
 };
 
-const RW_REPORT_STATUS_HEX = { Draft: "#6b7680", Issued: "#3a9d5b" };
+const RW_REPORT_STATUS_HEX = { Draft: "#8a94a0", Issued: "#2e8b57" };
 
+// An indicator light + label, not a filled pill - see report_workbench.css
+// for why (the app models real alarm/status signal, not decoration).
 function rw_badge(text, color) {
 	if (!text) return "";
-	return `<span class="rw-badge" style="background:${color || "#6b7680"}">${frappe.utils.escape_html(text)}</span>`;
+	return (
+		`<span class="rw-badge"><span class="rw-badge-dot" style="background:${color || "#8a94a0"}"></span>` +
+		`${frappe.utils.escape_html(text)}</span>`
+	);
 }
 
 manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
@@ -192,7 +197,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			const $tr = $("<tr>").appendTo($tbody);
 			$("<td>").text(row.customer || "").appendTo($tr);
 			$("<td>").text(row.area_name || row.area || "").appendTo($tr);
-			$("<td>").text(row.period_label || "").appendTo($tr);
+			$('<td class="rw-mono">').text(row.period_label || "").appendTo($tr);
 			$("<td>").html(rw_badge(row.status, RW_REPORT_STATUS_HEX[row.status])).appendTo($tr);
 			$tr.on("click", () => this.report_control.set_value(row.name));
 		});
@@ -280,7 +285,9 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 	}
 
 	render_report_card() {
-		this.$report_card = $('<div class="rw-card">').appendTo(this.$workbench);
+		// The one panel per screen that gets real elevation - see the CSS
+		// file header for why the rest of the page stays hairline-flat.
+		this.$report_card = $('<div class="rw-card rw-card-featured">').appendTo(this.$workbench);
 	}
 
 	render_report_header() {
@@ -301,7 +308,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		if (doc.prepared_by) $("<span>").text(doc.prepared_by).appendTo($meta);
 		if (doc.instrument) $("<span>").text(doc.instrument).appendTo($meta);
 
-		$("<div>").html(rw_badge(doc.status, RW_REPORT_STATUS_HEX[doc.status])).appendTo($head);
+		$('<div class="rw-badge-lg">').html(rw_badge(doc.status, RW_REPORT_STATUS_HEX[doc.status])).appendTo($head);
 
 		if (doc.notes) {
 			$('<div class="rw-notes">').text(doc.notes).appendTo(this.$report_card);
@@ -365,6 +372,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		if (!total) return;
 
 		const $bar = $('<div class="rw-summary-bar">').appendTo(this.$summary_wrap);
+		$('<div class="rw-summary-ticks">').appendTo(this.$summary_wrap);
 		const $legend = $('<div class="rw-summary-legend">').appendTo(this.$summary_wrap);
 
 		RW_SEVERITY_OPTIONS.forEach((sev) => {
@@ -374,7 +382,8 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			$(`<div class="rw-summary-seg" style="width:${pct}%;background:${RW_SEVERITY_HEX[sev]}">`).appendTo($bar);
 			const $item = $('<div class="rw-summary-legend-item">').appendTo($legend);
 			$('<span class="rw-summary-dot">').css("background", RW_SEVERITY_HEX[sev]).appendTo($item);
-			$("<span>").text(`${sev}: ${row.total}`).appendTo($item);
+			$("<span>").text(`${sev} `).appendTo($item);
+			$('<span class="rw-summary-value">').text(row.total).appendTo($item);
 		});
 	}
 
