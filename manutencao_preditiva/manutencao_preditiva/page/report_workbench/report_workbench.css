@@ -264,6 +264,60 @@
 	margin: 2px 0 10px;
 }
 
+/* ---- image gallery (sheet editor) ----------------------------------------- */
+
+.rw-gallery {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.rw-gallery-card {
+	position: relative;
+	width: 140px;
+}
+
+.rw-gallery-card img {
+	width: 140px;
+	height: 100px;
+	object-fit: cover;
+	border-radius: 8px;
+	border: 1px solid var(--rw-line);
+	cursor: pointer;
+	display: block;
+}
+
+.rw-gallery-caption {
+	width: 100%;
+	margin-top: 4px;
+	border: 1px solid var(--rw-line);
+	border-radius: 6px;
+	padding: 4px 6px;
+	font-size: 12px;
+}
+
+.rw-gallery-remove {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 20px;
+	height: 20px;
+	line-height: 18px;
+	text-align: center;
+	border-radius: 50%;
+	border: none;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	cursor: pointer;
+	font-size: 14px;
+	padding: 0;
+}
+
+.rw-gallery-add {
+	max-width: 260px;
+}
+
 /* ---- severity summary bar ------------------------------------------------ */
 
 .rw-summary-bar {

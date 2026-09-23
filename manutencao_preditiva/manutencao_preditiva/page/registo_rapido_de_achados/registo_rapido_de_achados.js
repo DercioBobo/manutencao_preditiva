@@ -630,6 +630,61 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		return readings;
 	}
 
+	// Gallery editor: thumbnails with an editable caption under each, a
+	// remove button, and an "Add Image" control that appends rather than
+	// replacing - so a sheet can carry as many photos as it needs, each
+	// with its own description, not just one. `images` is the live array
+	// (captions/removals mutate it directly) - the caller keeps its own
+	// reference and sends it as-is on save, no separate collection step.
+	render_image_gallery($wrap, images) {
+		$wrap.empty();
+		const $grid = $('<div class="rra-gallery">').appendTo($wrap);
+
+		const redraw = () => {
+			$grid.empty();
+			images.forEach((img, index) => {
+				const $card = $('<div class="rra-gallery-card">').appendTo($grid);
+				$(`<img src="${frappe.utils.escape_html(img.image)}">`)
+					.on("click", () => window.open(img.image, "_blank"))
+					.appendTo($card);
+				const $caption = $(
+					`<input type="text" class="rra-gallery-caption" placeholder="${__("Caption")}">`
+				)
+					.val(img.caption || "")
+					.appendTo($card);
+				$caption.on("input", () => {
+					img.caption = $caption.val();
+				});
+				$(`<button type="button" class="rra-gallery-remove" title="${__("Remove")}">&times;</button>`)
+					.appendTo($card)
+					.on("click", () => {
+						images.splice(index, 1);
+						redraw();
+					});
+			});
+		};
+		redraw();
+
+		const $add_wrap = $('<div class="rra-gallery-add">').appendTo($wrap);
+		const control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Attach Image",
+				fieldname: "gallery_add",
+				label: __("Add Image"),
+				onchange: () => {
+					const url = control.get_value();
+					if (!url) return;
+					images.push({ image: url, caption: "" });
+					control.set_value("");
+					redraw();
+				},
+			},
+			parent: $add_wrap[0],
+			render_input: true,
+		});
+		control.refresh();
+	}
+
 	// ---- create / edit dialog ------------------------------------------------
 
 	get_dialog_fields(data) {
@@ -672,8 +727,8 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				depends_on: "eval:doc.override_severity",
 				mandatory_depends_on: "eval:doc.override_severity",
 			},
-			{ fieldtype: "Section Break", label: __("Image") },
-			{ fieldtype: "Attach Image", fieldname: "new_image", label: __("Add Image") },
+			{ fieldtype: "Section Break", label: __("Images") },
+			{ fieldtype: "HTML", fieldname: "images_html", options: "" },
 		];
 	}
 
@@ -681,12 +736,17 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		const is_new = mode === "new";
 
 		const show_dialog = (data) => {
+			// Own copy, stripped to the two business fields - see save_finding()
+			// for why a fetched child row's own metadata isn't carried forward
+			// as-is. Mutated in place by the gallery editor.
+			const images = (data.images || []).map((img) => ({ image: img.image, caption: img.caption || "" }));
+
 			const dialog = new frappe.ui.Dialog({
 				title: is_new ? __("New Finding") : __("Edit Finding {0}", [name]),
 				size: "large",
 				fields: this.get_dialog_fields(data),
 				primary_action_label: __("Save"),
-				primary_action: (values) => this.save_finding(dialog, data, values),
+				primary_action: (values) => this.save_finding(dialog, data, values, images),
 			});
 
 			dialog.fields_dict.equipment_display.$wrapper.html(
@@ -695,6 +755,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				)}</b></div>`
 			);
 			this.render_readings_editor(dialog.fields_dict.readings_html.$wrapper, data.readings || []);
+			this.render_image_gallery(dialog.fields_dict.images_html.$wrapper, images);
 
 			dialog.set_values({
 				tolerance_percent: data.tolerance_percent || 0,
@@ -776,26 +837,19 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		dialog.show();
 	}
 
-	save_finding(dialog, data, values) {
+	save_finding(dialog, data, values, images) {
 		dialog.get_primary_btn().prop("disabled", true);
 
 		const readings = this.collect_readings(dialog.fields_dict.readings_html.$wrapper);
 		const update = {
 			readings,
+			images,
 			tolerance_percent: values.tolerance_percent || 0,
 			defects: values.defects,
 			recommendations: values.recommendations,
 			follow_up: values.follow_up,
 		};
 		if (values.override_severity && values.severity) update.severity = values.severity;
-		if (values.new_image) {
-			// Only the business fields - re-sending a fetched child row's own
-			// "name"/idx/parent metadata as-is risks Frappe treating it as an
-			// update to that specific row instead of a fresh one; stripped
-			// down to plain data, every row here is unambiguously a new one.
-			const existing_images = (data.images || []).map((img) => ({ image: img.image, caption: img.caption || "" }));
-			update.images = existing_images.concat([{ image: values.new_image }]);
-		}
 
 		frappe
 			.call({

@@ -129,18 +129,29 @@ portal, all reading the same sheets. Nothing entered twice.
 ### Known gaps (deliberate scope cuts, not bugs)
 - [ ] **Report Workbench's sheet dialog needs a click-through too** -
   brand new (2026-09-23), adapted from Quick Finding Entry's editor but
-  never run. Same one-image-per-session limit as Quick Finding Entry (see
-  below) - "Open Full Form" inside the dialog is the way to anything it
-  doesn't cover.
-- [ ] **Quick Finding Entry: one image per edit session**, no multi-image
-  gallery or captions there - full galleries need the native Equipment
-  Inspection form.
+  never run - readings, diagnosis, and now the image gallery (add/remove/
+  caption, multiple photos) all included. "Open Full Form" inside the
+  dialog is the way to anything it doesn't cover.
+- [x] ~~Quick Finding Entry: one image per edit session~~ Fixed 2026-09-23:
+  both Quick Finding Entry and Report Workbench's sheet dialogs now have a
+  real gallery editor (thumbnails, per-image caption, remove, click to
+  open full size) - not a native Frappe Table control (same reasoning as
+  the readings grid below), a hand-built one built once and reused across
+  both pages.
 - [ ] **Quick Finding Entry's readings grid is hand-built inputs**, not a
   native Frappe Table control - lower risk without a bench to test
   against, but less capable (e.g. can't add/remove points from there).
-- [ ] **My Findings dropped three things** the old Achado had:
-  "Componente / Localização do Defeito", "Plano de Monitorização", and
-  the card thumbnail image (now only in the detail dialog's gallery).
+- [ ] **My Findings dropped two things** the old Achado had:
+  "Componente / Localização do Defeito" and "Plano de Monitorização". The
+  card thumbnail stays gone by design (multiple images per sheet now, no
+  cheap "first one" query for a list) but the detail dialog's gallery
+  shows captions under each photo since 2026-09-23.
+- [ ] **Native Equipment Inspection form's "Images" field is untouched** -
+  it's a plain Frappe Table grid (already supports multiple rows, each
+  with its own image + caption), just not styled as a gallery. Left as-is:
+  it's the power-user fallback ("Open Full Form" from both dialogs), and
+  reskinning a native grid's rendering is more invasive than the two
+  hand-built editors above.
 - [ ] **Only vibration is built.** Thermography (the other Excel tracker,
   FR.TEC.016) and any other technique need their own Word report examined
   the same way `relatorio 1.pdf` was, plus their thresholds.

@@ -1164,9 +1164,21 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		}
 
 		if ((data.images || []).length) {
-			html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">';
+			html += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">';
 			data.images.forEach((img) => {
-				html += `<img class="ma-summary-image" src="${frappe.utils.escape_html(img.image)}">`;
+				html += `<figure style="margin:0;width:160px">`;
+				html += `<img class="ma-summary-image" style="width:160px;height:110px;object-fit:cover;cursor:pointer" src="${frappe.utils.escape_html(
+					img.image
+				)}" onclick="window.open('${frappe.utils.escape_html(img.image)}', '_blank')">`;
+				if (img.caption) {
+					// Plain hex, not var(--ma-muted) - this HTML renders inside a
+					// frappe.ui.Dialog, which sits outside the .ma container the
+					// custom property is scoped to.
+					html += `<figcaption style="font-size:11px;color:#6b7680;margin-top:2px">${frappe.utils.escape_html(
+						img.caption
+					)}</figcaption>`;
+				}
+				html += `</figure>`;
 			});
 			html += "</div>";
 		}

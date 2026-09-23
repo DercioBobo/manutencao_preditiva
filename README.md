@@ -121,14 +121,15 @@ table, all in one page.
   Finding" instead - see below for why the two pages don't share that
   word.)
 - Clicking a sheet in the table opens it in a **Dialog right there** -
-  readings table, diagnosis, one new image, and the same "Override
-  suggested severity" checkbox Quick Finding Entry has. That editor is
-  adapted from Quick Finding Entry's (`registo_rapido_de_achados.js`), not
-  a fresh build, so this is still only the *second* editing surface in the
-  app, not a third: the native Equipment Inspection form, and this shared
-  Dialog pattern now used by two pages. The dialog has its own **Open Full
-  Form** link for anything it doesn't cover (multiple images, more detail).
-  A real side panel and a second full page were both considered and
+  readings table, diagnosis, an image **gallery** (thumbnails, one caption
+  field each, add/remove freely - not just one photo), and the same
+  "Override suggested severity" checkbox Quick Finding Entry has. That
+  editor is adapted from Quick Finding Entry's (`registo_rapido_de_achados.js`),
+  not a fresh build, so this is still only the *second* editing surface in
+  the app, not a third: the native Equipment Inspection form, and this
+  shared Dialog pattern now used by two pages. The dialog has its own
+  **Open Full Form** link for anything it doesn't cover. A real side panel
+  and a second full page were both considered and
   rejected for this - see the file's header comment for why.
 
 Staff-only (System Manager / Tecnico de Inspecao) - not client-facing.
@@ -175,10 +176,13 @@ here creates/opens that sheet, not a standalone entry:
   suggested severity" checkbox, for cases where the diagnosis (e.g. a
   bearing defect seen in the spectrum) is worse than the readings alone
   indicate.
-- Only lets you attach **one** new image per edit session (the full
-  gallery, with captions, stays on the native Equipment Inspection form - a
-  hand-built multi-attachment grid inside a Dialog carried more risk than
-  was worth it without a bench to test against).
+- **Image gallery** built the same way as the readings table - a hand-built
+  grid, not a native Table-fieldtype control. Each photo is a thumbnail with
+  its own caption input and a remove button; adding one keeps every photo
+  already there instead of replacing it. Click a thumbnail to open it full
+  size in a new tab. (Originally scoped to one photo per edit session -
+  extended to a real gallery once the same pattern was reused in Report
+  Workbench.)
 - Saves via `frappe.client.set_value` (not `insert`) once the sheet exists
   - real validation still happens in the Equipment Inspection controller
   (severity, previous readings, etc.), the same path used by any other way
@@ -213,10 +217,10 @@ Two things the old Achado had that the new Equipment Inspection doesn't
 model (left out of the finding's summary): "Componente / Localização do
 Defeito" (free text per finding) and "Plano de Monitorização". The card
 thumbnail is gone too - Equipment Inspection allows several images per
-sheet (a gallery in the detail dialog), not one, and there's no cheap way
-to bring back "the first one" for the list without a query per row. In
-exchange, the detail dialog now shows the equipment's readings table
-(point, mm/s, g's, temp.).
+sheet (a gallery in the detail dialog, captions shown under each photo when
+set), not one, and there's no cheap way to bring back "the first one" for
+the list without a query per row. In exchange, the detail dialog now shows
+the equipment's readings table (point, mm/s, g's, temp.).
 
 ### Workspaces
 
