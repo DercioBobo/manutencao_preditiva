@@ -1,6 +1,23 @@
 // Copyright (c) 2026, Dércio Bobo and contributors
 // For license information, please see license.txt
 
+// Same severity colours used throughout the app - see equipment.js for why
+// this stays a plain inline map on native forms rather than the app's own
+// CSS custom properties.
+const IR_SEVERITY_COLOR = {
+	Normal: "#2e8b57",
+	Acceptable: "#b8960c",
+	Alarm: "#d97b29",
+	Critical: "#c43b3b",
+	"Not Collected": "#8a94a0",
+};
+
+function ir_dot(color) {
+	return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:${
+		color || "#d9d9d9"
+	};border:1px solid rgba(0,0,0,.15)"></span>`;
+}
+
 frappe.ui.form.on("Inspection Report", {
 	setup(frm) {
 		frm.set_query("area", () => ({ filters: { customer: frm.doc.customer } }));
@@ -13,6 +30,7 @@ frappe.ui.form.on("Inspection Report", {
 	refresh(frm) {
 		frm.page.set_indicator(__(frm.doc.status), frm.doc.status === "Issued" ? "green" : "orange");
 		frm.trigger("render_summary");
+		frm.trigger("render_sheets_panel");
 
 		if (frm.is_new()) return;
 
@@ -32,6 +50,61 @@ frappe.ui.form.on("Inspection Report", {
 		frm.add_custom_button(__("Open Sheets"), () => {
 			frappe.set_route("List", "Equipment Inspection", { report: frm.doc.name });
 		});
+	},
+
+	// Every equipment covered by this report, right on the form - which
+	// equipment, its severity/status, and a defects preview - instead of
+	// only being reachable via "Open Sheets" (a separate filtered list) or
+	// the Connections tab (a count you have to click through first).
+	render_sheets_panel(frm) {
+		const wrapper = frm.fields_dict.sheets_html && frm.fields_dict.sheets_html.$wrapper;
+		if (!wrapper || frm.is_new()) return;
+
+		wrapper.html(`<p class="text-muted">${__("Loading...")}</p>`);
+
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: { report: frm.doc.name },
+					fields: ["name", "equipment", "equipment_description", "severity", "action_status", "defects"],
+					order_by: "equipment_description",
+					limit_page_length: 0,
+				},
+			})
+			.then((r) => {
+				const rows = r.message || [];
+				if (!rows.length) {
+					wrapper.html(`<p class="text-muted">${__("No sheets yet - use Create Equipment Sheets above.")}</p>`);
+					return;
+				}
+
+				const body = rows
+					.map(
+						(row) => `
+						<tr class="ir-sheet-row" data-name="${frappe.utils.escape_html(row.name)}" style="cursor:pointer">
+							<td>${frappe.utils.escape_html(row.equipment_description || row.equipment)}</td>
+							<td>${ir_dot(IR_SEVERITY_COLOR[row.severity])}${frappe.utils.escape_html(row.severity || "")}</td>
+							<td>${frappe.utils.escape_html(row.action_status || "")}</td>
+							<td class="text-muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${frappe.utils.escape_html(
+								row.defects || ""
+							)}</td>
+						</tr>`
+					)
+					.join("");
+
+				wrapper.html(`
+					<table class="table table-sm">
+						<thead><tr><th>${__("Equipment")}</th><th>${__("Severity")}</th><th>${__("Status")}</th><th>${__("Defects")}</th></tr></thead>
+						<tbody>${body}</tbody>
+					</table>
+				`);
+
+				wrapper.find(".ir-sheet-row").on("click", function () {
+					frappe.set_route("Form", "Equipment Inspection", $(this).data("name"));
+				});
+			});
 	},
 
 	render_summary(frm) {

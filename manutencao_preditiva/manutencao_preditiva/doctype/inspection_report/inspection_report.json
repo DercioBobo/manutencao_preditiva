@@ -20,6 +20,8 @@
   "technicians",
   "sb_summary",
   "summary_html",
+  "sb_sheets",
+  "sheets_html",
   "sb_notes",
   "notes"
  ],
@@ -123,6 +125,15 @@
   },
   {
    "fieldname": "summary_html",
+   "fieldtype": "HTML"
+  },
+  {
+   "fieldname": "sb_sheets",
+   "fieldtype": "Section Break",
+   "label": "Equipment Sheets"
+  },
+  {
+   "fieldname": "sheets_html",
    "fieldtype": "HTML"
   },
   {
