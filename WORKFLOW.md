@@ -80,6 +80,11 @@ Once every sheet has a severity, click **Issue Report** in Report Workbench
 - **Print Report** in the Workbench opens the finished PDF: cover page,
   alarm tables, area summary with pie chart, per-equipment sheets - all
   computed from what was typed in, nothing retyped.
+- **Its sheets lock for technical edits** the moment it's Issued - readings,
+  severity, diagnosis, images can't be changed (or a new sheet added)
+  without first clicking **Reopen to Draft**. The Client Response section
+  stays open throughout, since that's what the client (or staff on their
+  behalf) uses after Issue.
 
 ## 4. Day to day
 
@@ -118,6 +123,12 @@ portal, all reading the same sheets. Nothing entered twice.
   found and fixed there (see below); the picker, New Report dialog,
   toggling Issue/Draft, Create Equipment Sheets, New Sheet, and Print
   Report are otherwise still unverified against the real bench.
+- [ ] **The Issue-lock (2026-09-23) needs a real save, not just the mock
+  test.** `test_equipment_inspection_lock.py` covers the logic against a
+  fake frappe (7 scenarios, all passing - see README), but nothing has
+  confirmed the actual server error surfaces cleanly in a real dialog, or
+  that `get_doc_before_save()` behaves the same on a real bench as the
+  mock assumes.
 - [x] ~~`order_by` ambiguous-column crash~~ Fixed 2026-09-23: any query
   fetching a dotted `link.field` (e.g. `area.area_name`) joins that table,
   so a bare `order_by` column (`creation`, `modified`, ...) - or even

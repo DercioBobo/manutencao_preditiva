@@ -332,6 +332,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				});
 				this.render_report_header();
 				this.load_recent_reports();
+				this.render_sheets_lock_note(); // sheets didn't change, but whether they're locked did
 			})
 			.always(() => this.$toggle_status_btn.prop("disabled", false));
 	}
@@ -385,10 +386,25 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$new_sheet_btn = $(`<button class="rw-btn rw-btn-primary">${__("New Sheet")}</button>`).appendTo($buttons);
 		this.$new_sheet_btn.on("click", () => this.open_equipment_picker());
 
+		// The report picker above has no Draft-only filter (Report Workbench
+		// is meant to also browse Issued reports), so this is the one place
+		// a técnico could land on an Issued report and try to edit a sheet -
+		// server-side (equipment_inspection.py) refuses it either way, this
+		// just says so before they click instead of only after.
+		this.$sheets_lock_note = $('<div class="rw-notes" style="margin-bottom:10px"></div>').appendTo(this.$sheets_card);
+
 		this.$sheets_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$sheets_card);
 	}
 
+	render_sheets_lock_note() {
+		const locked = this.report_doc.status === "Issued";
+		this.$sheets_lock_note
+			.toggle(locked)
+			.text(locked ? __("This report is Issued - sheets are locked. Reopen to Draft to edit them.") : "");
+	}
+
 	load_sheets() {
+		this.render_sheets_lock_note();
 		this.$sheets_table_wrap.html(`<div class="rw-empty">${__("Loading...")}</div>`);
 		frappe
 			.call({

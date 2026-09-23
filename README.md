@@ -55,11 +55,27 @@ Issued, and can only write the *Client Response* fields. They see it through
 which reads Equipment Inspection / Inspection Report instead of the old
 Achado De Inspecao.
 
-The severity rules are plain Python in `manutencao_preditiva/vibration.py`;
-their tests need no bench:
+**Sheets lock once their report is Issued.** A sheet's technical content
+(readings, severity, defects, recommendations, follow-up, images, equipment,
+tolerance) can't be changed - or a new sheet added - while the parent
+report is Issued; saving throws `"{report} is Issued - reopen it to Draft
+before changing {field}."` (`equipment_inspection.py`,
+`validate_locked_after_issue()`). The Client Response section is exempt -
+that's exactly what's meant to be edited after Issue, by the client or by
+staff on their behalf. **Reopen to Draft** (Report Workbench) is the
+explicit way back into editing; there's no other override. Report
+Workbench shows a note above the sheets table when this applies, since its
+report picker (unlike Quick Finding Entry's) isn't limited to Draft
+reports.
+
+The severity rules are plain Python in `manutencao_preditiva/vibration.py`,
+and this lock has its own test using a minimal frappe mock
+(`manutencao_preditiva/tests/fake_frappe.py` - see its docstring for what it
+does and doesn't guarantee); neither needs a bench:
 
 ```bash
 python -m unittest manutencao_preditiva.tests.test_vibration
+python -m unittest manutencao_preditiva.tests.test_equipment_inspection_lock
 ```
 
 The Portuguese *doctypes* below (Campanha / Achado / Área / Equipamento) are

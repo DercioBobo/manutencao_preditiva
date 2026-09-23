@@ -11,12 +11,37 @@ from manutencao_preditiva.manutencao_preditiva.doctype.vibration_alarm_settings.
 )
 from manutencao_preditiva.vibration import NOT_COLLECTED, evaluate, worst
 
+# Once the parent report is Issued, these are locked - a técnico can't keep
+# changing what the client is already looking at without first reopening
+# the report to Draft (Report Workbench's "Reopen to Draft"). Deliberately
+# excludes the Client Response section (client_response, responsible,
+# due_date, action_status, completion_date, all permlevel 1): that's
+# exactly what's meant to be edited after Issue. "readings" and "images"
+# are child tables and checked separately (see validate_locked_after_issue)
+# since comparing them with a plain != does not work in Frappe.
+# fieldname -> the (untranslated) label shown in the "reopen it to Draft
+# before changing ..." error - translated with _() at the point of use, not
+# here, since a module-level _() call would freeze the translation to
+# whatever language happened to be active at import time. A small local map
+# rather than self.meta.get_label() - one less thing this depends on.
+LOCKED_AFTER_ISSUE_FIELDS = {
+	"equipment": "Equipment",
+	"tolerance_percent": "Tolerance",
+	"severity": "Severity",
+	"defects": "Defects Found",
+	"recommendations": "Recommendations",
+	"follow_up": "Actions Taken / Follow-up",
+}
+
 
 class EquipmentInspection(Document):
 	"""One equipment, in one report: the readings the technician typed, how
 	they compare with last time, and the analyst's diagnosis."""
 
 	def validate(self):
+		# First and unconditionally - fail fast with one clear reason rather
+		# than mixing "you can't do that" in among unrelated computed fields.
+		self.validate_locked_after_issue()
 		self.load_report_context()
 		self.load_equipment_context()
 		self.validate_unique_in_report()
@@ -25,6 +50,53 @@ class EquipmentInspection(Document):
 		self.evaluate_readings()
 		self.set_severity()
 		self.set_completion_date()
+
+	def validate_locked_after_issue(self):
+		if frappe.db.get_value("Inspection Report", self.report, "status") != "Issued":
+			return
+
+		if self.is_new():
+			frappe.throw(
+				_("{0} is Issued - reopen it to Draft before adding sheets.").format(self.report),
+				title=_("Report Issued"),
+			)
+
+		before = self.get_doc_before_save()
+		if not before:
+			return
+
+		for fieldname, label in LOCKED_AFTER_ISSUE_FIELDS.items():
+			if self.get(fieldname) != before.get(fieldname):
+				frappe.throw(
+					_("{0} is Issued - reopen it to Draft before changing {1}.").format(self.report, _(label)),
+					title=_("Report Issued"),
+				)
+
+		if self._readings_snapshot(self.readings) != self._readings_snapshot(before.readings):
+			frappe.throw(
+				_("{0} is Issued - reopen it to Draft before changing readings.").format(self.report),
+				title=_("Report Issued"),
+			)
+
+		if self._images_snapshot(self.images) != self._images_snapshot(before.images):
+			frappe.throw(
+				_("{0} is Issued - reopen it to Draft before changing images.").format(self.report),
+				title=_("Report Issued"),
+			)
+
+	@staticmethod
+	def _readings_snapshot(readings):
+		# Only the raw values a técnico can type - never the computed
+		# per-point severity, which the controller recomputes on every save
+		# regardless and would make an unrelated field look "changed".
+		return [
+			(row.point, flt(row.velocity_mm_s), flt(row.acceleration_g), flt(row.temperature_c))
+			for row in readings or []
+		]
+
+	@staticmethod
+	def _images_snapshot(images):
+		return [(row.image, row.caption or "") for row in images or []]
 
 	def load_report_context(self):
 		report = frappe.db.get_value(
