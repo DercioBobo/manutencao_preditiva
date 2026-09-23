@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Manutenção Preditiva</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Predictive maintenance: inspection reports, findings, and asset setup.\", \"col\": 12}}, {\"id\": \"card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}, {\"id\": \"card-workflow\", \"type\": \"card\", \"data\": {\"card_name\": \"Workflow\", \"col\": 4}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Client Portal\", \"col\": 4}}, {\"id\": \"card-legacy\", \"type\": \"card\", \"data\": {\"card_name\": \"Legacy Data (Portuguese model)\", \"col\": 4}}]",
+ "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Manutencao Preditiva</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Predictive maintenance: inspection reports, findings, and asset setup.\", \"col\": 12}}, {\"id\": \"card-setup\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}, {\"id\": \"card-workflow\", \"type\": \"card\", \"data\": {\"card_name\": \"Workflow\", \"col\": 4}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Client Portal\", \"col\": 4}}, {\"id\": \"card-legacy\", \"type\": \"card\", \"data\": {\"card_name\": \"Legacy Data (Portuguese model)\", \"col\": 4}}]",
  "creation": "2026-09-13 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -10,7 +10,7 @@
  "icon": "tool",
  "idx": 0,
  "is_hidden": 0,
- "label": "Manutenção Preditiva",
+ "label": "Manutencao Preditiva",
  "links": [
   {
    "doctype": "Workspace Link",
@@ -243,5 +243,5 @@
  ],
  "sequence_id": 1.0,
  "shortcuts": [],
- "title": "Manutenção Preditiva"
+ "title": "Manutencao Preditiva"
 }
