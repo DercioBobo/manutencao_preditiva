@@ -437,6 +437,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 						"count(`tabEquipment Inspection`.name) as total",
 					],
 					group_by: "area, severity",
+					// Without this, Frappe's implicit default order (the doctype's own
+					// sort_field) is just as ambiguous once area.area_name joins in
+					// tabArea - see load_entries()/load_table_data() above for the
+					// same problem with an explicit order_by. The rows are re-pivoted
+					// client-side anyway, so row order from the query doesn't matter.
+					order_by: "",
 				},
 			}),
 			frappe.call({
@@ -885,7 +891,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 						"report.period_label as period_label",
 						"creation",
 					],
-					order_by: "report_date desc, creation desc",
+					// report_date and creation both exist on Equipment Inspection AND on
+					// the joined Inspection Report/Area tables (from the dotted fetches
+					// above) - unqualified, MySQL can't tell which one is meant.
+					order_by: "`tabEquipment Inspection`.report_date desc, `tabEquipment Inspection`.creation desc",
 					limit_start: this.offset,
 					limit_page_length: MA_PAGE_SIZE,
 				},
@@ -982,7 +991,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 						"report.period_label as period_label",
 						"creation",
 					],
-					order_by: "report_date desc, creation desc",
+					order_by: "`tabEquipment Inspection`.report_date desc, `tabEquipment Inspection`.creation desc",
 					limit_page_length: 500,
 				},
 			})

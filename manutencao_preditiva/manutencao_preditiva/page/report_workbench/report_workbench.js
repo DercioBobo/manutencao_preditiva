@@ -146,7 +146,9 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				args: {
 					doctype: "Inspection Report",
 					fields: ["name", "customer", "area", "area.area_name as area_name", "period_label", "report_date", "status"],
-					order_by: "report_date desc, creation desc",
+					// "creation" alone is ambiguous once the area.area_name fetch joins
+					// in tabArea (it has its own creation column too) - qualify it.
+					order_by: "report_date desc, `tabInspection Report`.creation desc",
 					limit_page_length: 100,
 				},
 			})

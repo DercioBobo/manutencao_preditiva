@@ -4,10 +4,14 @@ How to actually use the Inspection Report system, end to end, plus what's
 still missing before it's ready for a real client. See `README.md` for the
 data-model/architecture reference; this is the operational walkthrough.
 
-**Status: not yet run against a live bench.** Everything here has been
-checked as far as it can be without one (pure-Python tests, a mocked-frappe
-harness, a template render) - see "What's missing" below before relying on
-it for a real client visit.
+**Status: now running on a real bench** (Frappe 15.106.0 / ERPNext
+15.105.0) - most of it was only checked without one until now (pure-Python
+tests, a mocked-frappe harness, a template render), so treat anything not
+yet clicked through end-to-end as unverified. First live bug already found
+and fixed: `order_by` referencing a bare column name (`creation`,
+`modified`, ...) becomes ambiguous once a query also fetches a dotted
+`link.field`, since Frappe joins in that table too. See "What's missing"
+below.
 
 ## 0. Deploy it
 
@@ -97,8 +101,9 @@ portal, all reading the same sheets. Nothing entered twice.
 ## What's missing / next steps
 
 ### Before trusting it with a real client
-- [ ] **Never run against a live bench.** Do the full walkthrough above -
-  one small test report, start to finish - on a test site first.
+- [x] ~~Never run against a live bench.~~ Now running on one (Frappe
+  15.106.0 / ERPNext 15.105.0) - do the full walkthrough above, one small
+  test report start to finish, before a real client visit.
 - [ ] **Print format unverified in real wkhtmltopdf.** Only rendered
   through PyMuPDF as an approximation. Check page breaks, image sizing,
   and the pie chart at real print resolution.
@@ -109,11 +114,17 @@ portal, all reading the same sheets. Nothing entered twice.
 - [ ] **Client portal not tested with a real Cliente Portal login** - the
   draft-hides-from-clients permission logic (`permissions.py`) is
   reasoned through, not exercised against actual Frappe permission checks.
-- [ ] **Report Workbench is brand new, never run.** Same caveat as
-  everything else - only checked via JS syntax check and manual read-
-  through, no DOM/browser to execute it against. Worth a careful look on
-  first real use: the picker, the New Report dialog, toggling Issue/Draft,
-  Create Equipment Sheets, New Finding, and Print Report.
+- [ ] **Report Workbench needs a full click-through.** One bug already
+  found and fixed there (see below); the picker, New Report dialog,
+  toggling Issue/Draft, Create Equipment Sheets, New Finding, and Print
+  Report are otherwise still unverified against the real bench.
+- [x] ~~`order_by` ambiguous-column crash~~ Fixed 2026-09-23: any query
+  fetching a dotted `link.field` (e.g. `area.area_name`) joins that table,
+  so a bare `order_by` column (`creation`, `modified`, ...) - or even
+  Frappe's *implicit default* order when none is given - can collide with
+  the same column name on the joined table. Qualified every affected
+  `order_by` with the right table name, or set `order_by: ""` where row
+  order didn't matter. If a new query hits this again, that's the fix.
 
 ### Known gaps (deliberate scope cuts, not bugs)
 - [ ] **Report Workbench never edits a sheet inline** - clicking one always
