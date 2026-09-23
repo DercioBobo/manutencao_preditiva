@@ -2,15 +2,15 @@
 // For license information, please see license.txt
 //
 // Creates/edits Equipment Inspection sheets (Inspection Report system)
-// instead of the old Achado De Inspecao. Kept in Portuguese, like Meus
-// Achados - see that page's port for the language/label-map rationale.
+// instead of the old Achado De Inspecao. All UI text is English, matching
+// the stored severity/action-status values directly.
 //
-// The old page let a técnico log several separate free-form "achados" for
-// the same equipamento within one campanha. The new model has exactly one
+// The old page let a técnico log several separate free-form "findings" for
+// the same equipment within one campanha. The new model has exactly one
 // sheet per equipment per report (its readings table holds everything for
-// that equipment), so "Novo Achado" here means "start this equipment's
+// that equipment), so "New Finding" here means "start this equipment's
 // sheet", and editing means filling in its readings/diagnosis - not adding
-// another entry. A report also covers exactly one Área (fixed on the
+// another entry. A report also covers exactly one area (fixed on the
 // report, not chosen per sheet, unlike the old area_planta), so a técnico
 // covering more than one area in a visit now needs one Inspection Report
 // per area rather than one Campanha for the whole round.
@@ -20,6 +20,10 @@
 // exposes it for the bearing-defect-type judgement calls the old page had
 // no equivalent for; leaving it unchecked defers to the suggestion, same as
 // opening the full Equipment Inspection form and touching nothing.
+//
+// The page route ("/app/registo-rapido-de-achados") and this file's own
+// module name (manutencao_preditiva.RegistoRapidoDeAchados) are left as
+// they are - see meus_achados.js's header comment for why.
 
 frappe.provide("manutencao_preditiva");
 
@@ -34,25 +38,10 @@ frappe.pages["registo-rapido-de-achados"].on_page_show = function (wrapper) {
 const RRA_PAGE_SIZE = 50;
 
 // Worst-first, matching Meus Achados.
-const RRA_SEVERIDADE_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
-const RRA_ESTADO_OPTIONS = ["Open", "In Progress", "Done", "Not Applicable"];
+const RRA_SEVERITY_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
+const RRA_STATUS_OPTIONS = ["Open", "In Progress", "Done", "Not Applicable"];
 
-const RRA_SEVERIDADE_LABEL_PT = {
-	Critical: "Crítico",
-	Alarm: "Alarme",
-	Acceptable: "Aceitável",
-	Normal: "Boa Condição",
-	"Not Collected": "Não Recolhido",
-};
-
-const RRA_ESTADO_LABEL_PT = {
-	Open: "Pendente",
-	"In Progress": "Em Curso",
-	Done: "Concluído",
-	"Not Applicable": "Não Aplicável",
-};
-
-// Same CSS classes/colors the page already had - only the keys changed.
+// Same CSS classes/colors the page already had.
 const RRA_BADGE_CLASS = {
 	Critical: "rra-badge-critico",
 	Alarm: "rra-badge-alarme",
@@ -61,7 +50,7 @@ const RRA_BADGE_CLASS = {
 	"Not Collected": "rra-badge-nao-recolhido",
 };
 
-const RRA_ESTADO_BADGE_CLASS = {
+const RRA_STATUS_BADGE_CLASS = {
 	Open: "rra-badge-pendente",
 	"In Progress": "rra-badge-em-curso",
 	Done: "rra-badge-concluido",
@@ -80,11 +69,11 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 		this.table_rows = null;
 		this.table_sort = { field: "creation", dir: "desc" };
-		this.table_filters = { equipamento: "", severidade: "", estado: "" };
+		this.table_filters = { equipment: "", severity: "", status: "" };
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
-			title: __("Registo Rápido de Achados"),
+			title: __("Quick Finding Entry"),
 			single_column: true,
 		});
 
@@ -102,7 +91,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.render_filters();
 		this.$list = $('<div class="rra-list">').appendTo(this.$card_view);
 		this.$load_more_wrap = $('<div class="rra-load-more">').appendTo(this.$card_view).hide();
-		this.$load_more_btn = $(`<button class="rra-btn rra-btn-ghost">${__("Carregar mais")}</button>`).appendTo(
+		this.$load_more_btn = $(`<button class="rra-btn rra-btn-ghost">${__("Load more")}</button>`).appendTo(
 			this.$load_more_wrap
 		);
 		this.$load_more_btn.on("click", () => this.load_saved(true));
@@ -120,8 +109,8 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 	render_view_toggle() {
 		const $toggle = $('<div class="rra-view-toggle">').appendTo(this.$container);
-		this.$view_table_btn = $(`<button class="rra-view-btn">${__("Tabela")}</button>`).appendTo($toggle);
-		this.$view_cards_btn = $(`<button class="rra-view-btn">${__("Cartões")}</button>`).appendTo($toggle);
+		this.$view_table_btn = $(`<button class="rra-view-btn">${__("Table")}</button>`).appendTo($toggle);
+		this.$view_cards_btn = $(`<button class="rra-view-btn">${__("Cards")}</button>`).appendTo($toggle);
 		this.$view_cards_btn.on("click", () => this.switch_view("cards"));
 		this.$view_table_btn.on("click", () => this.switch_view("table"));
 	}
@@ -136,7 +125,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		if (!is_cards && !this.table_rows) this.load_table_data();
 	}
 
-	// ---- toolbar: report + "novo achado" / bulk create -----------------------
+	// ---- toolbar: report + "new finding" / bulk create -----------------------
 
 	render_toolbar() {
 		const $toolbar = $('<div class="rra-toolbar">').appendTo(this.$container);
@@ -147,7 +136,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			df: {
 				fieldtype: "Link",
 				fieldname: "report",
-				label: __("Relatório"),
+				label: __("Report"),
 				options: "Inspection Report",
 				reqd: 1,
 				get_query: () => ({ filters: { status: "Draft" } }),
@@ -161,17 +150,17 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.$report_info = $('<div class="rra-campanha-info">').appendTo($fields);
 
 		const $actions = $('<div class="rra-toolbar-actions">').appendTo($toolbar);
-		this.$bulk_btn = $(`<button class="rra-btn rra-btn-ghost" disabled>${__("Criar Fichas de Equipamento")}</button>`).appendTo(
+		this.$bulk_btn = $(`<button class="rra-btn rra-btn-ghost" disabled>${__("Create Equipment Sheets")}</button>`).appendTo(
 			$actions
 		);
 		this.$bulk_btn.on("click", () => this.create_all_sheets());
 
 		this.$add_btn = $(`
 			<button class="rra-btn rra-btn-primary" disabled>
-				<span class="rra-icon-plus"></span><span>${__("Novo Achado")}</span>
+				<span class="rra-icon-plus"></span><span>${__("New Finding")}</span>
 			</button>
 		`).appendTo($actions);
-		this.$add_btn.on("click", () => this.open_achado_dialog({ mode: "new" }));
+		this.$add_btn.on("click", () => this.open_finding_dialog({ mode: "new" }));
 	}
 
 	on_report_change() {
@@ -200,9 +189,9 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			this.report_info.area_name = (area_r.message && area_r.message.area_name) || this.report_info.area;
 
 			this.$report_info.html(
-				`${__("Cliente")}: <b>${frappe.utils.escape_html(this.report_info.customer || "")}</b>` +
-					`&nbsp;&middot;&nbsp;${__("Área")}: <b>${frappe.utils.escape_html(this.report_info.area_name || "")}</b>` +
-					`&nbsp;&middot;&nbsp;${__("Técnica")}: <b>${frappe.utils.escape_html(this.report_info.technique || "")}</b>`
+				`${__("Customer")}: <b>${frappe.utils.escape_html(this.report_info.customer || "")}</b>` +
+					`&nbsp;&middot;&nbsp;${__("Area")}: <b>${frappe.utils.escape_html(this.report_info.area_name || "")}</b>` +
+					`&nbsp;&middot;&nbsp;${__("Technique")}: <b>${frappe.utils.escape_html(this.report_info.technique || "")}</b>`
 			);
 			this.$add_btn.prop("disabled", false);
 			this.$bulk_btn.prop("disabled", false);
@@ -215,22 +204,22 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		const report = this.report_control.get_value();
 		if (!report) return;
 
-		this.$bulk_btn.prop("disabled", true).text(__("A criar..."));
+		this.$bulk_btn.prop("disabled", true).text(__("Creating..."));
 		frappe
 			.call({ method: "manutencao_preditiva.inspection_api.create_equipment_sheets", args: { report } })
 			.then((r) => {
 				const created = r.message || 0;
 				frappe.show_alert({
 					message: created
-						? __("{0} fichas criadas", [created])
-						: __("Todos os equipamentos activos desta área já têm ficha"),
+						? __("{0} sheets created", [created])
+						: __("Every active equipment in this area already has a sheet"),
 					indicator: created ? "green" : "blue",
 				});
 				this.load_saved();
 				if (this.table_rows) this.load_table_data();
 			})
 			.always(() => {
-				this.$bulk_btn.prop("disabled", false).text(__("Criar Fichas de Equipamento"));
+				this.$bulk_btn.prop("disabled", false).text(__("Create Equipment Sheets"));
 			});
 	}
 
@@ -240,7 +229,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		this.$filters = $('<div class="rra-filters">').appendTo(this.$card_view);
 
 		this.$search = $(
-			`<input type="text" class="rra-search" placeholder="${__("Pesquisar por equipamento, descrição...")}">`
+			`<input type="text" class="rra-search" placeholder="${__("Search by equipment, description...")}">`
 		).appendTo(this.$filters);
 		this.$search.on("input", () => {
 			this.search_term = (this.$search.val() || "").toLowerCase().trim();
@@ -248,7 +237,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 
 		this.$chips = $('<div class="rra-chips">').appendTo(this.$filters);
-		const chip_defs = [["all", __("Todos")]].concat(RRA_SEVERIDADE_OPTIONS.map((s) => [s, RRA_SEVERIDADE_LABEL_PT[s]]));
+		const chip_defs = [["all", __("All")]].concat(RRA_SEVERITY_OPTIONS.map((s) => [s, s]));
 		chip_defs.forEach(([key, label]) => {
 			const $chip = $(`<button class="rra-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
 				this.$chips
@@ -279,7 +268,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		});
 		this.$empty_filtered && this.$empty_filtered.remove();
 		if (this.saved_entries.length && visible === 0) {
-			this.$empty_filtered = $(`<div class="rra-empty">${__("Nenhum achado corresponde ao filtro.")}</div>`).appendTo(
+			this.$empty_filtered = $(`<div class="rra-empty">${__("No finding matches the filter.")}</div>`).appendTo(
 				this.$list
 			);
 		}
@@ -298,10 +287,10 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			if (sev) counts[sev] = (counts[sev] || 0) + 1;
 		});
 
-		const parts = [`<span class="rra-summary-total">${this.saved_entries.length} ${__("achados")}</span>`];
-		RRA_SEVERIDADE_OPTIONS.forEach((sev) => {
+		const parts = [`<span class="rra-summary-total">${this.saved_entries.length} ${__("findings")}</span>`];
+		RRA_SEVERITY_OPTIONS.forEach((sev) => {
 			if (counts[sev]) {
-				parts.push(`<span class="rra-badge ${RRA_BADGE_CLASS[sev]}">${counts[sev]} ${RRA_SEVERIDADE_LABEL_PT[sev]}</span>`);
+				parts.push(`<span class="rra-badge ${RRA_BADGE_CLASS[sev]}">${counts[sev]} ${sev}</span>`);
 			}
 		});
 		this.$summary.html(parts.join(""));
@@ -315,8 +304,8 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 		if (!this.saved_entries.length) {
 			const msg = this.report_info
-				? __('Ainda sem fichas. Clique em "Novo Achado" ou "Criar Fichas de Equipamento" para começar.')
-				: __("Selecione um relatório para começar a registar achados.");
+				? __('No sheets yet. Click "New Finding" or "Create Equipment Sheets" to start.')
+				: __("Select a report to start logging findings.");
 			this.$list.html(`<div class="rra-empty">${msg}</div>`);
 			this.$filters.toggle(false);
 			this.$load_more_wrap.hide();
@@ -340,7 +329,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		}
 		if (!append) this.saved_offset = 0;
 
-		this.$load_more_btn.prop("disabled", true).text(__("A carregar..."));
+		this.$load_more_btn.prop("disabled", true).text(__("Loading..."));
 
 		frappe
 			.call({
@@ -376,7 +365,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				this.refresh_list();
 			})
 			.always(() => {
-				this.$load_more_btn.prop("disabled", false).text(__("Carregar mais"));
+				this.$load_more_btn.prop("disabled", false).text(__("Load more"));
 			});
 	}
 
@@ -388,7 +377,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		const $card = $('<div class="rra-card">');
 		const $row = $('<div class="rra-saved-row">').appendTo($card);
 
-		$(`<span class="rra-badge ${badge_class}">`).text(row.severity ? RRA_SEVERIDADE_LABEL_PT[row.severity] : __("Sem leituras")).appendTo($row);
+		$(`<span class="rra-badge ${badge_class}">`).text(row.severity || __("No readings")).appendTo($row);
 
 		const $main = $('<div class="rra-saved-main">').appendTo($row);
 		$('<div class="rra-saved-title">').text(row.equipment_description || row.equipment || "").appendTo($main);
@@ -396,63 +385,61 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 		const $meta = $('<div class="rra-saved-meta">').appendTo($row);
 		if (row.action_status) {
-			$(`<span class="rra-badge ${RRA_ESTADO_BADGE_CLASS[row.action_status]}">`).text(RRA_ESTADO_LABEL_PT[row.action_status]).appendTo($meta);
+			$(`<span class="rra-badge ${RRA_STATUS_BADGE_CLASS[row.action_status]}">`).text(row.action_status).appendTo($meta);
 		}
 		if (row.suggested_severity && row.suggested_severity !== row.severity) {
-			$("<span>").text(__("sugestão: {0}", [RRA_SEVERIDADE_LABEL_PT[row.suggested_severity]])).appendTo($meta);
+			$("<span>").text(__("suggestion: {0}", [row.suggested_severity])).appendTo($meta);
 		}
 		$("<span>").html(comment_when(row.creation)).appendTo($meta);
 
-		$row.on("click", () => this.open_achado_dialog({ mode: "edit", name: row.name }));
+		$row.on("click", () => this.open_finding_dialog({ mode: "edit", name: row.name }));
 
 		return $card;
 	}
 
 	// ---- table view: sortable columns + per-column filters --------------------
-	// Scoped to the currently selected Relatório, same as the card list. No
-	// Área column - every sheet in a report shares the same area (see the
-	// file header note), so it would just repeat the toolbar's info line.
+	// Scoped to the currently selected report, same as the card list. No Area
+	// column - every sheet in a report shares the same area (see the file
+	// header note), so it would just repeat the toolbar's info line.
 
 	get_table_columns() {
 		return [
 			{
 				field: "severity",
-				label: __("Severidade"),
+				label: __("Severity"),
 				sortable: true,
 				filter: "select",
-				filterKey: "severidade",
-				options: RRA_SEVERIDADE_OPTIONS,
-				option_labels: RRA_SEVERIDADE_LABEL_PT,
+				filterKey: "severity",
+				options: RRA_SEVERITY_OPTIONS,
 			},
-			{ field: "equipment_description", label: __("Equipamento"), sortable: true, filter: "text", filterKey: "equipamento" },
+			{ field: "equipment_description", label: __("Equipment"), sortable: true, filter: "text", filterKey: "equipment" },
 			{
 				field: "action_status",
-				label: __("Estado"),
+				label: __("Status"),
 				sortable: true,
 				filter: "select",
-				filterKey: "estado",
-				options: RRA_ESTADO_OPTIONS,
-				option_labels: RRA_ESTADO_LABEL_PT,
+				filterKey: "status",
+				options: RRA_STATUS_OPTIONS,
 			},
-			{ field: "defects", label: __("Defeitos Apresentados") },
-			{ field: "creation", label: __("Quando"), sortable: true },
+			{ field: "defects", label: __("Defects Found") },
+			{ field: "creation", label: __("When"), sortable: true },
 		];
 	}
 
 	render_table_shell() {
 		this.$table_view = $('<div class="rra-table-wrap">').appendTo(this.$container).hide();
-		this.$table_view.html(`<div class="rra-empty">${__("Selecione um relatório para ver a tabela.")}</div>`);
+		this.$table_view.html(`<div class="rra-empty">${__("Select a report to see the table.")}</div>`);
 	}
 
 	load_table_data() {
 		const report = this.report_control.get_value();
 		if (!report) {
 			this.table_rows = null;
-			this.$table_view.html(`<div class="rra-empty">${__("Selecione um relatório para ver a tabela.")}</div>`);
+			this.$table_view.html(`<div class="rra-empty">${__("Select a report to see the table.")}</div>`);
 			return;
 		}
 
-		this.$table_view.html(`<div class="rra-empty">${__("A carregar...")}</div>`);
+		this.$table_view.html(`<div class="rra-empty">${__("Loading...")}</div>`);
 
 		frappe
 			.call({
@@ -493,7 +480,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		columns.forEach((col) => {
 			const $td = $("<th>").appendTo($filter_row);
 			if (col.filter === "text") {
-				const $input = $(`<input type="text" class="rra-table-filter-input" placeholder="${__("Filtrar...")}">`).appendTo(
+				const $input = $(`<input type="text" class="rra-table-filter-input" placeholder="${__("Filter...")}">`).appendTo(
 					$td
 				);
 				$input.val(this.table_filters[col.filterKey] || "");
@@ -503,8 +490,8 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				});
 			} else if (col.filter === "select") {
 				const $select = $('<select class="rra-table-filter-input">').appendTo($td);
-				$(`<option value="">${__("Todas")}</option>`).appendTo($select);
-				col.options.forEach((o) => $(`<option value="${o}">${col.option_labels[o]}</option>`).appendTo($select));
+				$(`<option value="">${__("All")}</option>`).appendTo($select);
+				col.options.forEach((o) => $(`<option value="${o}">${o}</option>`).appendTo($select));
 				$select.val(this.table_filters[col.filterKey] || "");
 				$select.on("change", () => {
 					this.table_filters[col.filterKey] = $select.val();
@@ -519,8 +506,8 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	}
 
 	get_table_sort_value(row, field) {
-		if (field === "severity") return RRA_SEVERIDADE_OPTIONS.indexOf(row.severity);
-		if (field === "action_status") return RRA_ESTADO_OPTIONS.indexOf(row.action_status || "Open");
+		if (field === "severity") return RRA_SEVERITY_OPTIONS.indexOf(row.severity);
+		if (field === "action_status") return RRA_STATUS_OPTIONS.indexOf(row.action_status || "Open");
 		return (row[field] || "").toString().toLowerCase();
 	}
 
@@ -545,12 +532,12 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 	render_table_rows() {
 		const columns = this.get_table_columns();
 		let rows = (this.table_rows || []).filter((row) => {
-			if (this.table_filters.equipamento) {
+			if (this.table_filters.equipment) {
 				const v = (row.equipment_description || row.equipment || "").toLowerCase();
-				if (!v.includes(this.table_filters.equipamento.toLowerCase())) return false;
+				if (!v.includes(this.table_filters.equipment.toLowerCase())) return false;
 			}
-			if (this.table_filters.severidade && row.severity !== this.table_filters.severidade) return false;
-			if (this.table_filters.estado && (row.action_status || "Open") !== this.table_filters.estado) return false;
+			if (this.table_filters.severity && row.severity !== this.table_filters.severity) return false;
+			if (this.table_filters.status && (row.action_status || "Open") !== this.table_filters.status) return false;
 			return true;
 		});
 
@@ -568,7 +555,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		if (!rows.length) {
 			const $empty_row = $("<tr>").appendTo(this.$table_tbody);
 			$(`<td colspan="${columns.length}">`)
-				.html(`<div class="rra-empty">${__("Nenhum achado corresponde ao filtro.")}</div>`)
+				.html(`<div class="rra-empty">${__("No finding matches the filter.")}</div>`)
 				.appendTo($empty_row);
 			return;
 		}
@@ -579,18 +566,18 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				const $td = $("<td>").appendTo($tr);
 				if (col.field === "severity") {
 					const cls = RRA_BADGE_CLASS[row.severity] || "rra-badge-nao-recolhido";
-					$(`<span class="rra-badge ${cls}">`).text(row.severity ? RRA_SEVERIDADE_LABEL_PT[row.severity] : "").appendTo($td);
+					$(`<span class="rra-badge ${cls}">`).text(row.severity || "").appendTo($td);
 				} else if (col.field === "action_status") {
-					const estado = RRA_ESTADO_LABEL_PT[row.action_status] || __("Pendente");
-					const cls = RRA_ESTADO_BADGE_CLASS[row.action_status] || "rra-badge-pendente";
-					$(`<span class="rra-badge ${cls}">`).text(estado).appendTo($td);
+					const status = row.action_status || __("Open");
+					const cls = RRA_STATUS_BADGE_CLASS[row.action_status] || "rra-badge-pendente";
+					$(`<span class="rra-badge ${cls}">`).text(status).appendTo($td);
 				} else if (col.field === "creation") {
 					$td.html(comment_when(row.creation));
 				} else {
 					$td.text(row[col.field] || "").attr("title", row[col.field] || "");
 				}
 			});
-			$tr.on("click", () => this.open_achado_dialog({ mode: "edit", name: row.name }));
+			$tr.on("click", () => this.open_finding_dialog({ mode: "edit", name: row.name }));
 		});
 	}
 
@@ -604,14 +591,14 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		$wrap.empty();
 		if (!readings || !readings.length) {
 			$wrap.html(
-				`<p class="text-muted">${__("Este equipamento não tem pontos de medição configurados - adicione-os em Equipamento de Inspeção antes de registar leituras.")}</p>`
+				`<p class="text-muted">${__("This equipment has no measurement points configured - add them in Inspection Equipment before recording readings.")}</p>`
 			);
 			return;
 		}
 
 		const $table = $('<table class="rra-readings">').appendTo($wrap);
 		$table.append(
-			`<thead><tr><th>${__("Ponto")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead>`
+			`<thead><tr><th>${__("Point")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead>`
 		);
 		const $tbody = $("<tbody>").appendTo($table);
 
@@ -651,59 +638,59 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 
 		return [
 			{ fieldtype: "HTML", fieldname: "equipment_display", options: "" },
-			{ fieldtype: "Section Break", label: __("Leituras") },
+			{ fieldtype: "Section Break", label: __("Readings") },
 			{ fieldtype: "HTML", fieldname: "readings_html", options: "" },
 			{
 				fieldtype: "HTML",
 				fieldname: "suggested_note",
-				options: `<div class="rra-suggested-note">${__("Severidade sugerida pelas leituras")}: <b>${
-					suggested ? RRA_SEVERIDADE_LABEL_PT[suggested] : "—"
-				}</b> (${__("recalculada ao guardar")})</div>`,
+				options: `<div class="rra-suggested-note">${__("Severity suggested by the readings")}: <b>${
+					suggested || "—"
+				}</b> (${__("recalculated on save")})</div>`,
 			},
-			{ fieldtype: "Percent", fieldname: "tolerance_percent", label: __("Tolerância (%)") },
-			{ fieldtype: "Section Break", label: __("Diagnóstico") },
-			{ fieldtype: "Small Text", fieldname: "defects", label: __("Defeitos Apresentados") },
+			{ fieldtype: "Percent", fieldname: "tolerance_percent", label: __("Tolerance (%)") },
+			{ fieldtype: "Section Break", label: __("Diagnosis") },
+			{ fieldtype: "Small Text", fieldname: "defects", label: __("Defects Found") },
 			{ fieldtype: "Column Break" },
-			{ fieldtype: "Small Text", fieldname: "recommendations", label: __("Recomendações") },
+			{ fieldtype: "Small Text", fieldname: "recommendations", label: __("Recommendations") },
 			{ fieldtype: "Section Break" },
-			{ fieldtype: "Small Text", fieldname: "follow_up", label: __("Ações Tomadas") },
+			{ fieldtype: "Small Text", fieldname: "follow_up", label: __("Actions Taken / Follow-up") },
 			{ fieldtype: "Section Break" },
 			{
 				fieldtype: "Check",
 				fieldname: "override_severity",
-				label: __("Substituir severidade sugerida"),
+				label: __("Override suggested severity"),
 				default: overridden ? 1 : 0,
 				description: __(
-					"Deixe desmarcado para a severidade seguir a sugestão automaticamente. Use quando o diagnóstico (ex.: defeito de rolamento visto no espectro) é mais grave do que as leituras sozinhas indicam."
+					"Leave unchecked for severity to follow the readings automatically. Use this when the diagnosis (e.g. a bearing defect seen in the spectrum) is worse than the readings alone indicate."
 				),
 			},
 			{
 				fieldtype: "Select",
 				fieldname: "severity",
-				label: __("Severidade"),
-				options: RRA_SEVERIDADE_OPTIONS.join("\n"),
+				label: __("Severity"),
+				options: RRA_SEVERITY_OPTIONS.join("\n"),
 				depends_on: "eval:doc.override_severity",
 				mandatory_depends_on: "eval:doc.override_severity",
 			},
-			{ fieldtype: "Section Break", label: __("Imagem") },
-			{ fieldtype: "Attach Image", fieldname: "new_image", label: __("Adicionar Imagem") },
+			{ fieldtype: "Section Break", label: __("Image") },
+			{ fieldtype: "Attach Image", fieldname: "new_image", label: __("Add Image") },
 		];
 	}
 
-	open_achado_dialog({ mode, name }) {
+	open_finding_dialog({ mode, name }) {
 		const is_new = mode === "new";
 
 		const show_dialog = (data) => {
 			const dialog = new frappe.ui.Dialog({
-				title: is_new ? __("Novo Achado") : __("Editar Achado {0}", [name]),
+				title: is_new ? __("New Finding") : __("Edit Finding {0}", [name]),
 				size: "large",
 				fields: this.get_dialog_fields(data),
-				primary_action_label: __("Guardar"),
-				primary_action: (values) => this.save_achado(dialog, data, values),
+				primary_action_label: __("Save"),
+				primary_action: (values) => this.save_finding(dialog, data, values),
 			});
 
 			dialog.fields_dict.equipment_display.$wrapper.html(
-				`<div class="rra-campanha-info">${__("Equipamento")}: <b>${frappe.utils.escape_html(
+				`<div class="rra-campanha-info">${__("Equipment")}: <b>${frappe.utils.escape_html(
 					data.equipment_description || data.equipment
 				)}</b></div>`
 			);
@@ -717,14 +704,6 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				severity: data.severity || "",
 			});
 
-			// The Select's stored values are English - only the displayed text
-			// is swapped to Portuguese, same technique as Meus Achados.
-			dialog.fields_dict.severity.$input.find("option").each((_, opt) => {
-				const $opt = $(opt);
-				const value = $opt.attr("value");
-				if (value) $opt.text(RRA_SEVERIDADE_LABEL_PT[value] || value);
-			});
-
 			dialog.show();
 		};
 
@@ -734,7 +713,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			// Fetching the full doc takes a couple hundred ms - freeze so the
 			// click gets instant feedback and a second click (no visible
 			// reaction otherwise) can't fire a duplicate fetch/dialog.
-			frappe.dom.freeze(__("A abrir achado..."));
+			frappe.dom.freeze(__("Opening finding..."));
 			frappe
 				.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } })
 				.then((r) => show_dialog(r.message))
@@ -752,12 +731,12 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		const used = new Set(this.saved_entries.map((e) => e.data.equipment));
 
 		const dialog = new frappe.ui.Dialog({
-			title: __("Novo Achado"),
+			title: __("New Finding"),
 			fields: [
 				{
 					fieldtype: "Link",
 					fieldname: "equipment",
-					label: __("Equipamento"),
+					label: __("Equipment"),
 					options: "Inspection Equipment",
 					reqd: 1,
 					get_query: () => ({
@@ -770,7 +749,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 					}),
 				},
 			],
-			primary_action_label: __("Criar Ficha"),
+			primary_action_label: __("Create Sheet"),
 			primary_action: (values) => {
 				dialog.get_primary_btn().prop("disabled", true);
 				frappe
@@ -797,7 +776,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		dialog.show();
 	}
 
-	save_achado(dialog, data, values) {
+	save_finding(dialog, data, values) {
 		dialog.get_primary_btn().prop("disabled", true);
 
 		const readings = this.collect_readings(dialog.fields_dict.readings_html.$wrapper);
@@ -824,7 +803,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 				args: { doctype: "Equipment Inspection", name: data.name, fieldname: update },
 			})
 			.then((r) => {
-				frappe.show_alert({ message: __("Achado {0} guardado", [data.name]), indicator: "green" });
+				frappe.show_alert({ message: __("Finding {0} saved", [data.name]), indicator: "green" });
 				dialog.hide();
 
 				const entry = this.saved_entries.find((e) => e.data.name === data.name);

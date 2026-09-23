@@ -1,9 +1,9 @@
 # Manutenção Preditiva (manutencao_preditiva)
 
-**Manutenção Preditiva** — aplicação de manutenção preditiva de ativos construída sobre o
-Frappe Framework, instalável num bench com ERPNext.
+**Manutenção Preditiva** — predictive asset maintenance application built on
+the Frappe Framework, installable on a bench with ERPNext.
 
-## Instalação
+## Installation
 
 ```bash
 bench get-app manutencao_preditiva <repo-url>
@@ -17,6 +17,10 @@ month - severity legend, alarm tables, a summary of the area, and one sheet
 per equipment with the readings, previous-month comparison, diagnosis and
 photos. The Excel "Action Tracker" is only a summary of it, so the app now
 models the report itself and produces the Excel from it.
+
+See **`WORKFLOW.md`** for the step-by-step operational guide (how to start,
+the day-to-day cycle, what's still missing before a real client visit). The
+summary below is the architecture reference.
 
 **Workflow**
 
@@ -47,9 +51,9 @@ equipment can carry a tolerance up to the maximum set there (10%).
 
 Clients (role *Cliente Portal*) only see a report, and its sheets, once it is
 Issued, and can only write the *Client Response* fields. They see it through
-**Meus Achados** (`/app/meus-achados`, unchanged route/UI language - see
-below), which now reads Equipment Inspection / Inspection Report instead of
-the old Achado De Inspecao.
+**My Findings** (`/app/meus-achados` - the route is unchanged, see below),
+which reads Equipment Inspection / Inspection Report instead of the old
+Achado De Inspecao.
 
 The severity rules are plain Python in `manutencao_preditiva/vibration.py`;
 their tests need no bench:
@@ -58,152 +62,159 @@ their tests need no bench:
 python -m unittest manutencao_preditiva.tests.test_vibration
 ```
 
-The Portuguese *doctypes* below (Campanha / Achado / Área / Equipamento)
-are the earlier, summary-level model, kept only so the historical data
-imported into them isn't lost until the user removes it - nothing new
-should be written there. Both Portuguese *pages* that used to write to
-them, **Meus Achados** and **Registo Rápido de Achados**, have been ported
-and now read/write Equipment Inspection / Inspection Report instead (see
-their sections further down) - the old doctypes exist without any
-still-active way to reach them through the UI.
+The Portuguese *doctypes* below (Campanha / Achado / Área / Equipamento) are
+the earlier, summary-level model, kept only so the historical data imported
+into them isn't lost until the user removes it - nothing new should be
+written there. Both pages that used to write to them, **My Findings** (Meus
+Achados) and **Quick Finding Entry** (Registo Rápido de Achados), have been
+ported and now read/write Equipment Inspection / Inspection Report instead
+(see their sections further down), with fully English UI - the old doctypes
+exist without any still-active way to reach them through the UI.
 
-## Módulos
+## Modules (Portuguese, legacy)
 
-- **Campanha De Inspecao** — cabeçalho de uma ronda de inspeção a um cliente
-  (Cliente, Técnica: Vibração/Termografia/…, data, referência do documento).
-- **Area De Inspecao** — mestre de áreas/plantas (ex.: "Sala Eléctrica",
-  "WCP A"), sempre associado a um Cliente. Nome interno em série (`AP-00001`)
-  para não colidir com acentos/formatação do texto - o campo "Área / Planta"
-  em si fica livre para editar/pesquisar normalmente. O dropdown em Achado
-  De Inspecao filtra automaticamente pelas áreas do mesmo cliente, para o
-  técnico não escrever a mesma área de formas diferentes por engano.
-- **Achado De Inspecao** — cada defeito/achado encontrado, ligado à campanha
-  e à área. Inclui a secção "Resposta do Cliente" (ação tomada, responsável,
-  prazo, estado, data de conclusão), editável apenas por quem tem permissão
-  de nível 1 nesses campos.
+Kept for their historical data only - see the note above. Route/page/role
+names below stay as they were created; only this description is in English.
 
-Substitui o fluxo anterior de "1 Excel por cliente" enviado por email: cada
-cliente tem um login de Desk restrito, via **User Permission** em Customer,
-à sua própria Cliente — vê e actualiza só os seus achados, sem aceder aos
-de outros clientes. Papéis: **Tecnico de Inspecao** (equipa interna, acesso
-total) e **Cliente Portal** (leitura + resposta apenas).
+- **Campanha De Inspecao** — header of one inspection round for a client
+  (Customer, Technique: Vibração/Termografia/…, date, document reference).
+- **Area De Inspecao** — area/plant master (e.g. "Sala Eléctrica", "WCP A"),
+  always tied to a Customer. Internal name is a series (`AP-00001`) so
+  accents/formatting in the free-text name never collide with it - the
+  "Área / Planta" field itself stays free to edit/search normally. The
+  dropdown on Achado De Inspecao filters automatically by the same
+  customer's areas, so a técnico can't type the same area two different ways
+  by mistake.
+- **Achado De Inspecao** — each defect/finding found, linked to the campanha
+  and the area. Includes a "Client Response" section (action taken,
+  responsible, due date, status, completion date), writable only by whoever
+  has permission level 1 on those fields.
 
-### Registo Rápido de Achados (página)
+Replaced the earlier "1 Excel per client, emailed" flow: each client gets a
+restricted Desk login, scoped via a **User Permission** on Customer to their
+own Customer - they see and update only their own findings, never another
+client's. Roles: **Tecnico de Inspecao** (internal team, full access) and
+**Cliente Portal** (read + respond only).
 
-Página dedicada para o técnico registar achados no campo rapidamente, em
-`/app/registo-rapido-de-achados` (acessível também pela awesomebar, ex.
-`Ctrl+G` → "Registo Rápido de Achados"). **Ported** - lê e escreve Equipment
-Inspection / Inspection Report, não o antigo Achado De Inspecao / Campanha
-De Inspecao. Interface em português, como o Meus Achados (mesma razão - ver
-a secção desse).
+### Quick Finding Entry / Registo Rápido de Achados (page)
 
-Mudança de fundo em relação ao antigo fluxo: um Achado deixou de ser um
-registo livre (o técnico podia lançar vários achados separados para o mesmo
-equipamento numa campanha); agora é uma **ficha por equipamento por
-relatório** (Equipment Inspection), com uma tabela de leituras por ponto de
-medição - reflecte a estrutura real do relatório em Word. "Novo Achado"
-aqui cria/abre essa ficha, não uma entrada solta:
+Dedicated page for a técnico to log findings quickly in the field, at
+`/app/registo-rapido-de-achados` (also reachable through the awesomebar,
+e.g. `Ctrl+G` → "Quick Finding Entry"). **Ported** - reads and writes
+Equipment Inspection / Inspection Report, not the old Achado De Inspecao /
+Campanha De Inspecao. UI is fully English now, like My Findings.
 
-- Selecciona-se um **Relatório** (só os que estão em **Draft** aparecem -
-  uma vez **Issued**, a edição passa a ser pela ficha completa). Como a
-  Área agora é fixa por Relatório (não escolhida por achado como antes), um
-  técnico que cubra várias áreas numa visita precisa de um Relatório por
-  área.
-- **Criar Fichas de Equipamento** cria de uma vez uma ficha vazia por cada
-  equipamento activo da área do relatório (reaproveita o mesmo botão que já
-  existe no formulário do Inspection Report). **Novo Achado** cria uma
-  ficha para um único equipamento (útil para um equipamento adicionado a
-  meio da ronda) e abre-a logo para edição - uma ficha vazia sem leituras
-  não serve de nada sozinha.
-- A edição mostra uma tabela simples (não um grid nativo do Frappe, para
-  reduzir risco sem um bench para testar) com um ponto por linha - mm/s,
-  g's, temp. - pré-preenchida com os pontos de medição configurados no
-  Equipamento de Inspeção. A severidade é **sugerida automaticamente** a
-  partir das leituras (`vibration.py`, igual ao resto do sistema) e só é
-  editável através de uma checkbox "Substituir severidade sugerida", para
-  os casos em que o diagnóstico (ex.: defeito de rolamento visto no
-  espectro) é mais grave do que as leituras isoladas indicam.
-- Só permite anexar **uma** imagem nova por sessão de edição (a galeria
-  completa, com legendas, fica reservada ao formulário nativo do Equipment
-  Inspection - um grid de anexos múltiplos dentro de um Dialog à mão tinha
-  risco a mais para testar sem bench).
-- Guarda via `frappe.client.set_value` (não `insert`) depois da ficha
-  criada - a validação real continua a acontecer no controller do
-  Equipment Inspection (cálculo da severidade, das leituras anteriores,
-  etc.), o mesmo caminho usado por qualquer outra forma de editar o
-  documento.
+Structural change from the old flow: a finding is no longer a free-form
+entry (a técnico used to be able to log several separate findings for the
+same equipment in one campanha); it's now **one sheet per equipment per
+report** (Equipment Inspection), with a readings table per measurement
+point - reflecting the real structure of the Word report. "New Finding"
+here creates/opens that sheet, not a standalone entry:
 
-### Meus Achados (portal do cliente)
+- Pick a **Report** (only ones in **Draft** show up - once **Issued**,
+  editing moves to the full sheet form). Since the area is now fixed per
+  report (not chosen per finding like before), a técnico covering several
+  areas in one visit needs one report per area.
+- **Create Equipment Sheets** creates, in one go, an empty sheet for every
+  active equipment in the report's area (reuses the same button that
+  already exists on the Inspection Report form). **New Finding** creates a
+  sheet for a single equipment (useful for one added mid-round) and opens
+  it straight into editing - an empty sheet with no readings isn't useful
+  on its own.
+- Editing shows a plain table (not a native Frappe grid, to reduce risk
+  without a bench to test against) with one row per point - mm/s, g's,
+  temp. - pre-filled from the equipment's configured measurement points.
+  Severity is **suggested automatically** from the readings (`vibration.py`,
+  same as the rest of the system) and is only editable through an "Override
+  suggested severity" checkbox, for cases where the diagnosis (e.g. a
+  bearing defect seen in the spectrum) is worse than the readings alone
+  indicate.
+- Only lets you attach **one** new image per edit session (the full
+  gallery, with captions, stays on the native Equipment Inspection form - a
+  hand-built multi-attachment grid inside a Dialog carried more risk than
+  was worth it without a bench to test against).
+- Saves via `frappe.client.set_value` (not `insert`) once the sheet exists
+  - real validation still happens in the Equipment Inspection controller
+  (severity, previous readings, etc.), the same path used by any other way
+  of editing the document.
 
-Página dedicada para o cliente (`/app/meus-achados`, papel **Cliente Portal**),
-com dois separadores:
+### My Findings / Meus Achados (client portal)
 
-- **Painel** — cartões com totais (achados, por resolver, críticos, em
-  atraso), gráficos de composição por severidade/estado, rankings das áreas
-  e equipamentos com mais achados, e um gráfico de achados por relatório ao
-  longo do tempo. Reflecte sempre o histórico completo do cliente, não só a
-  página actualmente carregada na lista.
-- **Achados** — pesquisa, filtro por severidade/estado e a lista de achados
-  em si. Clicar num achado abre um diálogo com o detalhe (só leitura) e a
-  secção de resposta (ação tomada, responsável, prazo, estado, data de
-  conclusão) — os únicos campos que este papel pode gravar, reforçado tanto
-  na interface como nas permissões (nível 1) do doctype.
+Dedicated page for the client (`/app/meus-achados`, role **Cliente
+Portal**), with two tabs:
 
-Lê Equipment Inspection / Inspection Report (não o antigo Achado De
-Inspecao / Campanha De Inspecao). Um achado só aparece aqui depois do
-respectivo Inspection Report passar a **Issued** — reforçado no servidor
-(`manutencao_preditiva/permissions.py`), não só na query desta página.
+- **Dashboard** — stat tiles (total, open, critical, overdue), composition
+  charts by severity/status, top-areas/top-equipment rankings, and a trend
+  chart of findings by report over time. Always reflects the client's full
+  history, not just whatever page of the list is currently loaded.
+- **Findings** — search, severity/status filter, and the list itself.
+  Clicking a finding opens a dialog with the read-only detail and the
+  response section (action taken, responsible, due date, status, completion
+  date) - the only fields this role can save, enforced both in the UI and
+  in the doctype's permissions (level 1).
 
-A interface mantém-se em português (é o que o cliente já conhece); só o
-que está por trás mudou de nome - severidade e estado são gravados em
-inglês (`Normal`/`Acceptable`/`Alarm`/`Critical`/`Not Collected`,
-`Open`/`In Progress`/`Done`/`Not Applicable`, os mesmos valores do
-Inspection Report), a página só troca o texto mostrado.
+Reads Equipment Inspection / Inspection Report (not the old Achado De
+Inspecao / Campanha De Inspecao). A finding only appears here once its
+Inspection Report is **Issued** - enforced server-side
+(`manutencao_preditiva/permissions.py`), not just in this page's query.
 
-Duas coisas que o antigo Achado tinha e o novo Equipment Inspection não
-modela (ficaram de fora do resumo do achado): "Componente / Localização do
-Defeito" (texto livre por achado) e "Plano de Monitorização". A miniatura
-de imagem no cartão também saiu - Equipment Inspection permite várias
-imagens por ficha (galeria no diálogo de detalhe), não uma só, e não há
-forma barata de trazer "a primeira" para a lista sem uma query por linha.
-Em troca, o diálogo de detalhe agora mostra a tabela de leituras (ponto,
-mm/s, g's, temp.) do equipamento.
+UI is fully English - severity and status are stored in English
+(`Normal`/`Acceptable`/`Alarm`/`Critical`/`Not Collected`,
+`Open`/`In Progress`/`Done`/`Not Applicable`) and shown as-is, no
+translation layer.
+
+Two things the old Achado had that the new Equipment Inspection doesn't
+model (left out of the finding's summary): "Componente / Localização do
+Defeito" (free text per finding) and "Plano de Monitorização". The card
+thumbnail is gone too - Equipment Inspection allows several images per
+sheet (a gallery in the detail dialog), not one, and there's no cheap way
+to bring back "the first one" for the list without a query per row. In
+exchange, the detail dialog now shows the equipment's readings table
+(point, mm/s, g's, temp.).
 
 ### Workspaces
 
-Duas Workspaces (visíveis conforme o papel do utilizador, via `roles`):
+Two Workspaces (visible per the user's role, via `roles`):
 
-- **Manutenção Preditiva** — Registo Rápido de Achados, listas de Campanha/
-  Achado/Área/Equipamento, e um atalho para a vista do cliente. Visível a
-  **System Manager** e **Tecnico de Inspecao**.
-- **Portal do Cliente** — atalho directo à página "Meus Achados". Tem de se
-  chamar diferente da própria página: o router do Frappe resolve Workspaces
-  antes de Páginas para o mesmo segmento de rota (`/app/<nome>`), portanto
-  uma Workspace chamada "Meus Achados" bloquearia permanentemente o acesso
-  à página com esse nome. Visível a **System Manager** e **Cliente Portal**.
+- **Manutenção Preditiva** — the internal workspace, visible to **System
+  Manager** and **Tecnico de Inspecao**, ordered as **Setup** (Vibration
+  Alarm Settings, Inspection Area, Inspection Equipment) → **Workflow**
+  (Quick Finding Entry, Inspection Report, Equipment Inspection, Action
+  Tracker) → **Client Portal** (shortcut to the client view) → **Legacy
+  Data (Portuguese model)** (Campanha/Achado/Área/Equipamento and their old
+  reports, demoted to the bottom since nothing writes to them anymore).
+- **Portal do Cliente** — direct shortcut to the "My Findings" page. Has to
+  be named differently from the page itself: Frappe's router resolves
+  Workspaces before Pages for the same route segment (`/app/<name>`), so a
+  Workspace named "My Findings" would permanently block access to the page
+  of that name. Visible to **System Manager** and **Cliente Portal**; kept
+  in Portuguese (`Portal do Cliente`) since that name is also the
+  `default_workspace` value client accounts are provisioned with in
+  `manutencao_preditiva/api.py` - renaming it needs that constant updated
+  too, so it was left out of this pass.
 
-### Importar os trackers históricos (Excel)
+### Importing the historical trackers (Excel)
 
-Os dois ficheiros "Action Tracker" originais (vibração e termografia) já
-foram extraídos localmente para `manutencao_preditiva/setup/data/achados_import.json`
-— um ficheiro plano, sem dependência de `openpyxl`, que viaja com a app no
-git. Os `.xlsx` originais nunca são commitados (ver `.gitignore`).
+The two original "Action Tracker" files (vibration and thermography) were
+already extracted locally into
+`manutencao_preditiva/setup/data/achados_import.json` - a flat,
+frappe-independent file that ships with the app in git. The original
+`.xlsx` files are never committed (see `.gitignore`).
 
-Depois de instalar a app no site (`bench get-app` + `bench migrate`), basta
-correr, sem argumentos — não precisa de `openpyxl` no bench nem de fazer
-upload de nada:
+After installing the app on the site (`bench get-app` + `bench migrate`),
+just run this, no arguments needed - no `openpyxl` required on the bench,
+nothing to upload:
 
 ```bash
 bench --site <site> execute manutencao_preditiva.setup.import_action_trackers.load_from_json
 ```
 
-É seguro correr mais do que uma vez — verifica registos existentes antes de
-criar duplicados. Cria os Customers "Kenmare"/"CLN" se ainda não existirem,
-depois as 2 Campanhas e os 321 Achados.
+Safe to run more than once - it checks for existing records before creating
+duplicates. Creates the "Kenmare"/"CLN" Customers if they don't exist yet,
+then the 2 Campanhas and the 321 Achados.
 
-Se um dos ficheiros Excel de origem for alterado, corra isto localmente
-(precisa de `openpyxl`, não de frappe) para regenerar o JSON antes de
-fazer commit:
+If one of the source Excel files changes, run this locally (needs
+`openpyxl`, not frappe) to regenerate the JSON before committing:
 
 ```bash
 python -c "

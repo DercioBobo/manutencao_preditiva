@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Portal do Cliente</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Aceda aos achados registados nas inspeções realizadas nas suas instalações.\", \"col\": 12}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Portal\", \"col\": 6}}]",
+ "content": "[{\"id\": \"header-1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Portal do Cliente</b></span>\", \"col\": 12}}, {\"id\": \"para-1\", \"type\": \"paragraph\", \"data\": {\"text\": \"Access the findings logged during inspections carried out at your site.\", \"col\": 12}}, {\"id\": \"card-portal\", \"type\": \"card\", \"data\": {\"card_name\": \"Portal\", \"col\": 6}}]",
  "creation": "2026-09-13 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -27,7 +27,7 @@
    "hidden": 0,
    "idx": 2,
    "is_query_report": 0,
-   "label": "Meus Achados",
+   "label": "My Findings",
    "link_count": 0,
    "link_to": "meus-achados",
    "link_type": "Page",
