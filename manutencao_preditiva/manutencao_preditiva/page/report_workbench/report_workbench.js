@@ -379,8 +379,8 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$bulk_btn = $(`<button class="rw-btn">${__("Create Equipment Sheets")}</button>`).appendTo($buttons);
 		this.$bulk_btn.on("click", () => this.create_all_sheets());
 
-		this.$new_finding_btn = $(`<button class="rw-btn rw-btn-primary">${__("New Finding")}</button>`).appendTo($buttons);
-		this.$new_finding_btn.on("click", () => this.open_equipment_picker());
+		this.$new_sheet_btn = $(`<button class="rw-btn rw-btn-primary">${__("New Sheet")}</button>`).appendTo($buttons);
+		this.$new_sheet_btn.on("click", () => this.open_equipment_picker());
 
 		this.$sheets_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$sheets_card);
 	}
@@ -417,7 +417,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$sheets_table_wrap.empty();
 		if (!rows.length) {
 			this.$sheets_table_wrap.html(
-				`<div class="rw-empty">${__('No sheets yet. Use "Create Equipment Sheets" or "New Finding" to start.')}</div>`
+				`<div class="rw-empty">${__('No sheets yet. Use "Create Equipment Sheets" or "New Sheet" to start.')}</div>`
 			);
 			return;
 		}
@@ -472,7 +472,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		const used = new Set(this.sheet_rows.map((row) => row.equipment));
 
 		const dialog = new frappe.ui.Dialog({
-			title: __("New Finding"),
+			title: __("New Equipment Sheet"),
 			fields: [
 				{
 					fieldtype: "Link",

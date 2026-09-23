@@ -115,9 +115,11 @@ table, all in one page.
   Form** goes to the report's own Desk form for editing its metadata
   (service reference, site address, notes, ...) - this page doesn't
   duplicate those fields.
-- **Create Equipment Sheets** (bulk) and **New Finding** (single equipment,
+- **Create Equipment Sheets** (bulk) and **New Sheet** (single equipment,
   excludes equipment that already has a sheet here) sit right above the
-  sheets table.
+  sheets table. (Quick Finding Entry's equivalent button is called "New
+  Finding" instead - see below for why the two pages don't share that
+  word.)
 - Clicking a sheet in the table navigates to its native Equipment
   Inspection form - **on purpose**, not an inline dialog. That form already
   auto-fills the readings table the moment you pick an equipment (see
@@ -136,6 +138,15 @@ Dedicated page for a técnico to log findings quickly in the field, at
 e.g. `Ctrl+G` → "Quick Finding Entry"). **Ported** - reads and writes
 Equipment Inspection / Inspection Report, not the old Achado De Inspecao /
 Campanha De Inspecao. UI is fully English now, like My Findings.
+
+**Why this page says "Finding" while Report Workbench says "Sheet"** for
+the exact same kind of record (Equipment Inspection): this page and My
+Findings are ported from the old Portuguese pages and deliberately kept
+"Finding"/"Achado" wording for técnico and client continuity with what
+they already knew; Report Workbench and the Inspection Report/Equipment
+Inspection forms were built fresh with no legacy wording to protect, so
+they use "Sheet" - matching the doctype's own concept. Two vocabularies,
+split cleanly by which pages are ported vs newly built, not a typo.
 
 Structural change from the old flow: a finding is no longer a free-form
 entry (a técnico used to be able to log several separate findings for the

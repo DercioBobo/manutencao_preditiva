@@ -116,7 +116,7 @@ portal, all reading the same sheets. Nothing entered twice.
   reasoned through, not exercised against actual Frappe permission checks.
 - [ ] **Report Workbench needs a full click-through.** One bug already
   found and fixed there (see below); the picker, New Report dialog,
-  toggling Issue/Draft, Create Equipment Sheets, New Finding, and Print
+  toggling Issue/Draft, Create Equipment Sheets, New Sheet, and Print
   Report are otherwise still unverified against the real bench.
 - [x] ~~`order_by` ambiguous-column crash~~ Fixed 2026-09-23: any query
   fetching a dotted `link.field` (e.g. `area.area_name`) joins that table,
