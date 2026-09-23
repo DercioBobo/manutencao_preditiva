@@ -34,9 +34,7 @@
    "fieldname": "previous_velocity_mm_s",
    "fieldtype": "Float",
    "label": "Prev. mm/s",
-   "read_only": 1,
-   "in_list_view": 1,
-   "columns": 1
+   "read_only": 1
   },
   {
    "fieldname": "acceleration_g",
@@ -49,9 +47,7 @@
    "fieldname": "previous_acceleration_g",
    "fieldtype": "Float",
    "label": "Prev. g's",
-   "read_only": 1,
-   "in_list_view": 1,
-   "columns": 1
+   "read_only": 1
   },
   {
    "fieldname": "temperature_c",

@@ -33,7 +33,7 @@ class InspectionReport(Document):
 		self.validate_can_be_issued()
 
 	def validate_area_belongs_to_customer(self):
-		area_customer = frappe.db.get_value("Inspection Area", self.area, "customer")
+		area_customer = frappe.db.get_value("Area", self.area, "customer")
 		if area_customer != self.customer:
 			frappe.throw(_("Area {0} belongs to {1}, not {2}.").format(self.area, area_customer, self.customer))
 
@@ -73,7 +73,7 @@ class InspectionReport(Document):
 
 		done = set(frappe.get_all("Equipment Inspection", filters={"report": self.name}, pluck="equipment"))
 		equipment = frappe.get_all(
-			"Inspection Equipment",
+			"Equipment",
 			filters={"customer": self.customer, "area": self.area, "disabled": 0},
 			pluck="name",
 			order_by="machine, description",
@@ -155,12 +155,12 @@ class InspectionReport(Document):
 				for row in doc.readings
 			]
 
-		machine = frappe.db.get_value("Inspection Equipment", sheet.equipment, "machine")
+		machine = frappe.db.get_value("Equipment", sheet.equipment, "machine")
 		return {
 			"number": number,
 			"machine": machine or "",
 			"description": sheet.equipment_description,
-			"area": frappe.db.get_value("Inspection Area", sheet.area, "area_name"),
+			"area": frappe.db.get_value("Area", sheet.area, "area_name"),
 			"severity": sheet.severity,
 			"color": COLORS.get(sheet.severity, ""),
 			"tolerance": f"{flt(sheet.tolerance_percent):g}",

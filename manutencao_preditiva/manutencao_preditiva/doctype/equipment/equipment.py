@@ -6,13 +6,13 @@ from frappe import _
 from frappe.model.document import Document
 
 
-class InspectionEquipment(Document):
+class Equipment(Document):
 	def validate(self):
 		self.validate_area_belongs_to_customer()
 		self.validate_unique_points()
 
 	def validate_area_belongs_to_customer(self):
-		area_customer = frappe.db.get_value("Inspection Area", self.area, "customer")
+		area_customer = frappe.db.get_value("Area", self.area, "customer")
 		if area_customer != self.customer:
 			frappe.throw(_("Area {0} belongs to {1}, not {2}.").format(self.area, area_customer, self.customer))
 

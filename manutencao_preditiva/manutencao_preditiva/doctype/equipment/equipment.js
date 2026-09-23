@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Dércio Bobo and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Inspection Equipment", {
+frappe.ui.form.on("Equipment", {
 	setup(frm) {
 		frm.set_query("area", () => ({ filters: { customer: frm.doc.customer } }));
 	},

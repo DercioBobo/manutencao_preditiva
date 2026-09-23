@@ -309,7 +309,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			$el.text(this._area_label_cache[code]);
 			return;
 		}
-		frappe.db.get_value("Inspection Area", code, "area_name").then((r) => {
+		frappe.db.get_value("Area", code, "area_name").then((r) => {
 			const label = (r.message && r.message.area_name) || code;
 			this._area_label_cache[code] = label;
 			$el.text(label);
@@ -323,7 +323,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			$el.text(this._equipment_label_cache[code]);
 			return;
 		}
-		frappe.db.get_value("Inspection Equipment", code, "description").then((r) => {
+		frappe.db.get_value("Equipment", code, "description").then((r) => {
 			const label = (r.message && r.message.description) || code;
 			this._equipment_label_cache[code] = label;
 			$el.text(label);
@@ -715,7 +715,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				fieldtype: "Link",
 				fieldname: "dashboard_area",
 				label: __("Area"),
-				options: "Inspection Area",
+				options: "Area",
 				onchange: () => {
 					this.dashboard_area_filter = this.dashboard_area_control.get_value();
 					this.load_dashboard();
@@ -732,7 +732,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				fieldtype: "Link",
 				fieldname: "dashboard_equipment",
 				label: __("Equipment"),
-				options: "Inspection Equipment",
+				options: "Equipment",
 				onchange: () => {
 					this.dashboard_equipment_filter = this.dashboard_equipment_control.get_value();
 					this.load_dashboard();
@@ -1182,7 +1182,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 				return Promise.all([
 					data.area
-						? frappe.db.get_value("Inspection Area", data.area, "area_name")
+						? frappe.db.get_value("Area", data.area, "area_name")
 						: Promise.resolve({ message: {} }),
 				]).then(([area_r]) => {
 					data.area_name = area_r.message && area_r.message.area_name;

@@ -29,7 +29,7 @@
    "fieldname": "area",
    "fieldtype": "Link",
    "label": "Area / Plant",
-   "options": "Inspection Area",
+   "options": "Area",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
@@ -87,7 +87,7 @@
  "modified": "2026-09-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
- "name": "Inspection Equipment",
+ "name": "Equipment",
  "owner": "Administrator",
  "permissions": [
   {

@@ -56,7 +56,7 @@
    "fieldname": "area",
    "fieldtype": "Link",
    "label": "Area / Plant",
-   "options": "Inspection Area",
+   "options": "Area",
    "read_only": 1,
    "in_standard_filter": 1,
    "fetch_from": "report.area"
@@ -76,7 +76,7 @@
    "fieldname": "equipment",
    "fieldtype": "Link",
    "label": "Equipment",
-   "options": "Inspection Equipment",
+   "options": "Equipment",
    "reqd": 1,
    "in_list_view": 1
   },

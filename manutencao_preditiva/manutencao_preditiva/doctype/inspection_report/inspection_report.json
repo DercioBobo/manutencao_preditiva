@@ -46,7 +46,7 @@
    "fieldname": "area",
    "fieldtype": "Link",
    "label": "Area / Plant",
-   "options": "Inspection Area",
+   "options": "Area",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1

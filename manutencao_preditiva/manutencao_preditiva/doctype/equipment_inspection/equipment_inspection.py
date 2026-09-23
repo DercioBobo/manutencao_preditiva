@@ -38,7 +38,7 @@ class EquipmentInspection(Document):
 
 	def load_equipment_context(self):
 		equipment = frappe.db.get_value(
-			"Inspection Equipment", self.equipment, ["customer", "description", "power_kw"], as_dict=True
+			"Equipment", self.equipment, ["customer", "description", "power_kw"], as_dict=True
 		)
 		if not equipment:
 			frappe.throw(_("Equipment {0} does not exist.").format(self.equipment))
@@ -68,7 +68,7 @@ class EquipmentInspection(Document):
 		equipment is set up with, so the technician only types numbers."""
 		if not self.is_new() or self.readings:
 			return
-		for point in frappe.get_doc("Inspection Equipment", self.equipment).points:
+		for point in frappe.get_doc("Equipment", self.equipment).points:
 			self.append("readings", {"point": point.point_code})
 
 	def link_previous_sheet(self):

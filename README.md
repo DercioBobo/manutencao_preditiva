@@ -24,7 +24,7 @@ summary below is the architecture reference.
 
 **Workflow**
 
-1. Once: set up the client's **Inspection Area** and **Inspection Equipment**
+1. Once: set up the client's **Area** and **Equipment**
    (rated power in kW, and its measurement points - `M1H`, `M2H`, `M2A`, ...).
 2. Per month: create an **Inspection Report** (customer, area, date, team),
    then *Create Equipment Sheets* - one **Equipment Inspection** per active
@@ -178,7 +178,7 @@ Two Workspaces (visible per the user's role, via `roles`):
 
 - **Manutenção Preditiva** — the internal workspace, visible to **System
   Manager** and **Tecnico de Inspecao**, ordered as **Setup** (Vibration
-  Alarm Settings, Inspection Area, Inspection Equipment) → **Workflow**
+  Alarm Settings, Area, Equipment) → **Workflow**
   (Quick Finding Entry, Inspection Report, Equipment Inspection, Action
   Tracker) → **Client Portal** (shortcut to the client view) → **Legacy
   Data (Portuguese model)** (Campanha/Achado/Área/Equipamento and their old

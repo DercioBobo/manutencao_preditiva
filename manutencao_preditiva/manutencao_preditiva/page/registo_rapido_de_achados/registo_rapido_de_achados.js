@@ -182,7 +182,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 			frappe.db.get_value("Inspection Report", report, ["customer", "area", "technique"]),
 			frappe.db.get_value("Inspection Report", report, "area").then((r) => {
 				const area = r.message && r.message.area;
-				return area ? frappe.db.get_value("Inspection Area", area, "area_name") : Promise.resolve({ message: {} });
+				return area ? frappe.db.get_value("Area", area, "area_name") : Promise.resolve({ message: {} });
 			}),
 		]).then(([report_r, area_r]) => {
 			this.report_info = report_r.message;
@@ -591,7 +591,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 		$wrap.empty();
 		if (!readings || !readings.length) {
 			$wrap.html(
-				`<p class="text-muted">${__("This equipment has no measurement points configured - add them in Inspection Equipment before recording readings.")}</p>`
+				`<p class="text-muted">${__("This equipment has no measurement points configured - add them in Equipment before recording readings.")}</p>`
 			);
 			return;
 		}
@@ -737,7 +737,7 @@ manutencao_preditiva.RegistoRapidoDeAchados = class RegistoRapidoDeAchados {
 					fieldtype: "Link",
 					fieldname: "equipment",
 					label: __("Equipment"),
-					options: "Inspection Equipment",
+					options: "Equipment",
 					reqd: 1,
 					get_query: () => ({
 						filters: [

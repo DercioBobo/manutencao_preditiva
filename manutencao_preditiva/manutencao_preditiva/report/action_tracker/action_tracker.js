@@ -14,7 +14,7 @@ frappe.query_reports["Action Tracker"] = {
 				return customer ? { filters: { customer } } : {};
 			},
 		},
-		{ fieldname: "area", label: __("Area"), fieldtype: "Link", options: "Inspection Area" },
+		{ fieldname: "area", label: __("Area"), fieldtype: "Link", options: "Area" },
 		{
 			fieldname: "severity",
 			label: __("Severity"),
