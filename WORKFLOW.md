@@ -38,35 +38,44 @@ client - only touch it if the actual thresholds change. Also under Setup.
 
 ## 2. The repeatable cycle, per visit/month
 
-The **Workflow** block in the same workspace:
+The **Workflow** block in the same workspace. **Report Workbench** is the
+starting point - pick or create the report there, see its whole picture
+(status, severity summary, every sheet) in one place, and jump anywhere
+else you need from it:
 
-1. **Create an Inspection Report** - customer, area, date, team, instrument.
-   Starts as **Draft**.
+1. In **Report Workbench**: pick an existing report from Recent Reports, or
+   **+ New Report** (customer, area, date, team, instrument). Starts as
+   **Draft**.
 2. **Create the sheets**, either:
-   - the **Create Equipment Sheets** button on the report itself (bulk -
-     one empty sheet per active equipment in that area), or
+   - **Create Equipment Sheets** in the Workbench (bulk - one empty sheet
+     per active equipment in that area), or
    - **Quick Finding Entry**, the técnico's field-entry page: pick the
      (Draft) report, **Create Equipment Sheets** there for the same bulk
      effect, or **New Finding** to add one equipment on the spot.
 3. **Enter readings.** Each sheet already lists its equipment's points; the
    técnico types velocity (mm/s), acceleration (g's), temperature per
    point. Severity is computed the moment it's saved - not set manually.
+   Click a sheet in the Workbench's table (or use Quick Finding Entry) to
+   open it.
 4. **Add the diagnosis.** Defects found, recommendations, actions taken,
    photos. If the readings alone don't tell the full story (e.g. a bearing
    defect visible in the spectrum), tick **Override suggested severity**
    and pick the real severity - otherwise it keeps following the numbers.
-5. Repeat per equipment. Quick Finding Entry is the fast path for this; the
-   full Equipment Inspection form covers anything the quick page doesn't
-   (multiple photos, more detail).
+5. Repeat per equipment. Quick Finding Entry is the fast path for entering
+   numbers; the Workbench's sheet table is the fast path for seeing where
+   everything stands and jumping to any sheet; the full Equipment
+   Inspection form covers anything neither shortcut does (multiple photos,
+   more detail).
 
 ## 3. Finishing
 
-Once every sheet has a severity, set the Inspection Report to **Issued**:
+Once every sheet has a severity, click **Issue Report** in Report Workbench
+(or set the status to Issued on the form directly):
 
 - The client can now see it - My Findings only ever shows Issued reports.
-- The **Vibration Report** print format becomes the finished PDF: cover
-  page, alarm tables, area summary with pie chart, per-equipment sheets -
-  all computed from what was typed in, nothing retyped.
+- **Print Report** in the Workbench opens the finished PDF: cover page,
+  alarm tables, area summary with pie chart, per-equipment sheets - all
+  computed from what was typed in, nothing retyped.
 
 ## 4. Day to day
 
@@ -100,8 +109,18 @@ portal, all reading the same sheets. Nothing entered twice.
 - [ ] **Client portal not tested with a real Cliente Portal login** - the
   draft-hides-from-clients permission logic (`permissions.py`) is
   reasoned through, not exercised against actual Frappe permission checks.
+- [ ] **Report Workbench is brand new, never run.** Same caveat as
+  everything else - only checked via JS syntax check and manual read-
+  through, no DOM/browser to execute it against. Worth a careful look on
+  first real use: the picker, the New Report dialog, toggling Issue/Draft,
+  Create Equipment Sheets, New Finding, and Print Report.
 
 ### Known gaps (deliberate scope cuts, not bugs)
+- [ ] **Report Workbench never edits a sheet inline** - clicking one always
+  navigates to the native Equipment Inspection form (a deliberate choice,
+  see README). If that back-and-forth turns out to be annoying in
+  practice, an inline editor is the natural next step, reusing Quick
+  Finding Entry's readings-editor code as a starting point.
 - [ ] **Quick Finding Entry: one image per edit session**, no multi-image
   gallery or captions there - full galleries need the native Equipment
   Inspection form.

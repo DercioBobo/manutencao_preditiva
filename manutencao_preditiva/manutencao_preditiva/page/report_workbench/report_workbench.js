@@ -1,0 +1,508 @@
+// Copyright (c) 2026, Dércio Bobo and contributors
+// For license information, please see license.txt
+//
+// The "see everything interlinked" hub: pick or create an Inspection
+// Report, see its whole team-facing picture in one place - status, severity
+// summary, every Equipment Inspection sheet in it - and jump to the PDF.
+//
+// Deliberately does NOT duplicate sheet editing here. Clicking a sheet
+// navigates to its native Equipment Inspection form (which already
+// auto-fills the readings table on picking an equipment, see
+// equipment_inspection.js) instead of opening a third copy of that UI - the
+// same editing surface already exists on the form and in Quick Finding
+// Entry, and a third hand-built one here would mean keeping three things in
+// sync with no bench to test any of them against. This page's job is the
+// overview and the connections between the pieces, not re-implementing
+// data entry.
+//
+// Staff-only (System Manager / Tecnico de Inspecao) - not client-facing,
+// see My Findings for that.
+
+frappe.provide("manutencao_preditiva");
+
+frappe.pages["report-workbench"].on_page_load = function (wrapper) {
+	wrapper.rw = new manutencao_preditiva.ReportWorkbench(wrapper);
+};
+
+frappe.pages["report-workbench"].on_page_show = function (wrapper) {
+	if (!wrapper.rw) return;
+	wrapper.rw.load_recent_reports();
+	if (wrapper.rw.report) wrapper.rw.load_report(wrapper.rw.report);
+};
+
+const RW_SEVERITY_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
+
+const RW_SEVERITY_HEX = {
+	Critical: "#c4453a",
+	Alarm: "#d99226",
+	Acceptable: "#b8a021",
+	Normal: "#3a9d5b",
+	"Not Collected": "#6b7680",
+};
+
+const RW_STATUS_HEX = {
+	Open: "#d99226",
+	"In Progress": "#2b6cb0",
+	Done: "#3a9d5b",
+	"Not Applicable": "#6b7680",
+};
+
+const RW_REPORT_STATUS_HEX = { Draft: "#6b7680", Issued: "#3a9d5b" };
+
+function rw_badge(text, color) {
+	if (!text) return "";
+	return `<span class="rw-badge" style="background:${color || "#6b7680"}">${frappe.utils.escape_html(text)}</span>`;
+}
+
+manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
+	constructor(wrapper) {
+		this.wrapper = wrapper;
+		this.report = null;
+		this.report_doc = null;
+		this.sheet_rows = [];
+		this.recent_rows = [];
+		this.recent_status_filter = "all";
+		this.recent_search = "";
+
+		this.page = frappe.ui.make_app_page({
+			parent: wrapper,
+			title: __("Report Workbench"),
+			single_column: true,
+		});
+
+		this.render_shell();
+		this.load_recent_reports();
+	}
+
+	render_shell() {
+		this.$container = $('<div class="rw">').appendTo(this.page.body);
+		this.render_picker();
+		this.$workbench = $("<div>").appendTo(this.$container).hide();
+		this.render_report_card();
+		this.render_sheets_card();
+	}
+
+	// ---- picker: pick an existing report, browse recent ones, or create one --
+
+	render_picker() {
+		const $card = $('<div class="rw-card">').appendTo(this.$container);
+		const $row = $('<div class="rw-picker-row">').appendTo($card);
+
+		const $field_wrap = $('<div class="rw-field">').appendTo($row);
+		this.report_control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Link",
+				fieldname: "report",
+				label: __("Report"),
+				options: "Inspection Report",
+				onchange: () => {
+					const value = this.report_control.get_value();
+					if (value) this.load_report(value);
+				},
+			},
+			parent: $field_wrap[0],
+			render_input: true,
+		});
+		this.report_control.refresh();
+
+		this.$new_btn = $(`<button class="rw-btn rw-btn-primary">${__("+ New Report")}</button>`).appendTo($row);
+		this.$new_btn.on("click", () => this.open_new_report_dialog());
+
+		const $recent_toolbar = $('<div class="rw-recent-toolbar">').appendTo($card);
+		$(`<div class="rw-recent-title">${__("Recent Reports")}</div>`).appendTo($recent_toolbar);
+
+		const $filters = $('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">').appendTo($recent_toolbar);
+		this.$recent_search = $(
+			`<input type="text" class="rw-search" placeholder="${__("Search customer, area, period...")}">`
+		).appendTo($filters);
+		this.$recent_search.on("input", () => {
+			this.recent_search = (this.$recent_search.val() || "").toLowerCase().trim();
+			this.render_recent_table();
+		});
+
+		this.$recent_chips = $('<div class="rw-chips">').appendTo($filters);
+		[
+			["all", __("All")],
+			["Draft", __("Draft")],
+			["Issued", __("Issued")],
+		].forEach(([key, label]) => {
+			const $chip = $(`<button class="rw-chip" data-key="${key}">${label}</button>`).appendTo(this.$recent_chips);
+			if (key === "all") $chip.addClass("active");
+			$chip.on("click", () => {
+				this.recent_status_filter = key;
+				this.$recent_chips.find(".rw-chip").removeClass("active");
+				$chip.addClass("active");
+				this.render_recent_table();
+			});
+		});
+
+		this.$recent_table_wrap = $('<div class="rw-table-wrap">').appendTo($card);
+	}
+
+	load_recent_reports() {
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Inspection Report",
+					fields: ["name", "customer", "area", "area.area_name as area_name", "period_label", "report_date", "status"],
+					order_by: "report_date desc, creation desc",
+					limit_page_length: 100,
+				},
+			})
+			.then((r) => {
+				this.recent_rows = r.message || [];
+				this.render_recent_table();
+			});
+	}
+
+	render_recent_table() {
+		const rows = this.recent_rows.filter((row) => {
+			if (this.recent_status_filter !== "all" && row.status !== this.recent_status_filter) return false;
+			if (!this.recent_search) return true;
+			const haystack = [row.customer, row.area_name, row.period_label].filter(Boolean).join(" ").toLowerCase();
+			return haystack.includes(this.recent_search);
+		});
+
+		this.$recent_table_wrap.empty();
+		if (!rows.length) {
+			this.$recent_table_wrap.html(`<div class="rw-empty">${__("No reports found.")}</div>`);
+			return;
+		}
+
+		const $table = $('<table class="rw-table">').appendTo(this.$recent_table_wrap);
+		$table.append(
+			`<thead><tr><th>${__("Customer")}</th><th>${__("Area")}</th><th>${__("Period")}</th><th>${__("Status")}</th></tr></thead>`
+		);
+		const $tbody = $("<tbody>").appendTo($table);
+		rows.forEach((row) => {
+			const $tr = $("<tr>").appendTo($tbody);
+			$("<td>").text(row.customer || "").appendTo($tr);
+			$("<td>").text(row.area_name || row.area || "").appendTo($tr);
+			$("<td>").text(row.period_label || "").appendTo($tr);
+			$("<td>").html(rw_badge(row.status, RW_REPORT_STATUS_HEX[row.status])).appendTo($tr);
+			$tr.on("click", () => this.report_control.set_value(row.name));
+		});
+	}
+
+	open_new_report_dialog() {
+		const dialog = new frappe.ui.Dialog({
+			title: __("New Inspection Report"),
+			fields: [
+				{
+					fieldtype: "Link",
+					fieldname: "customer",
+					label: __("Customer"),
+					options: "Customer",
+					reqd: 1,
+					onchange: () => dialog.set_value("area", ""),
+				},
+				{
+					fieldtype: "Link",
+					fieldname: "area",
+					label: __("Area / Plant"),
+					options: "Area",
+					reqd: 1,
+					get_query: () => ({ filters: { customer: dialog.get_value("customer") } }),
+				},
+				{ fieldtype: "Column Break" },
+				{
+					fieldtype: "Date",
+					fieldname: "report_date",
+					label: __("Report Date"),
+					default: frappe.datetime.get_today(),
+					reqd: 1,
+				},
+				{ fieldtype: "Data", fieldname: "service_reference", label: __("Service / Job No.") },
+				{ fieldtype: "Section Break" },
+				{ fieldtype: "Data", fieldname: "site_address", label: __("Site Address") },
+				{ fieldtype: "Column Break" },
+				{ fieldtype: "Data", fieldname: "prepared_by", label: __("Prepared by") },
+				{ fieldtype: "Section Break" },
+				{ fieldtype: "Data", fieldname: "instrument", label: __("Instrument"), default: "Vib-Xpert II" },
+				{ fieldtype: "Column Break" },
+				{ fieldtype: "Small Text", fieldname: "technicians", label: __("Technicians"), description: __("One per line") },
+			],
+			primary_action_label: __("Create"),
+			primary_action: (values) => {
+				dialog.get_primary_btn().prop("disabled", true);
+				frappe
+					.call({
+						method: "frappe.client.insert",
+						args: { doc: Object.assign({ doctype: "Inspection Report" }, values) },
+					})
+					.then((r) => {
+						dialog.hide();
+						frappe.show_alert({ message: __("Report {0} created", [r.message.name]), indicator: "green" });
+						this.load_recent_reports();
+						this.report_control.set_value(r.message.name);
+					})
+					.always(() => dialog.get_primary_btn().prop("disabled", false));
+			},
+		});
+		dialog.show();
+	}
+
+	// ---- selected report: header, actions, summary, sheets --------------------
+
+	load_report(name) {
+		this.report = name;
+		frappe.dom.freeze(__("Loading report..."));
+		frappe
+			.call({ method: "frappe.client.get", args: { doctype: "Inspection Report", name } })
+			.then((r) => {
+				const doc = r.message;
+				return (doc.area ? frappe.db.get_value("Area", doc.area, "area_name") : Promise.resolve({ message: {} })).then(
+					(area_r) => {
+						doc.area_name = (area_r.message && area_r.message.area_name) || doc.area;
+						this.report_doc = doc;
+						this.$workbench.show();
+						this.render_report_header();
+						this.load_summary();
+						this.load_sheets();
+					}
+				);
+			})
+			.always(() => frappe.dom.unfreeze());
+	}
+
+	render_report_card() {
+		this.$report_card = $('<div class="rw-card">').appendTo(this.$workbench);
+	}
+
+	render_report_header() {
+		const doc = this.report_doc;
+		this.$report_card.empty();
+
+		const $head = $('<div class="rw-report-head">').appendTo(this.$report_card);
+		const $title_wrap = $("<div>").appendTo($head);
+		$(
+			`<div class="rw-report-title">${frappe.utils.escape_html(doc.customer)} — ${frappe.utils.escape_html(
+				doc.period_label || doc.report_date
+			)}</div>`
+		).appendTo($title_wrap);
+
+		const $meta = $('<div class="rw-report-meta">').appendTo($title_wrap);
+		$("<span>").text(doc.area_name).appendTo($meta);
+		if (doc.service_reference) $("<span>").text(doc.service_reference).appendTo($meta);
+		if (doc.prepared_by) $("<span>").text(doc.prepared_by).appendTo($meta);
+		if (doc.instrument) $("<span>").text(doc.instrument).appendTo($meta);
+
+		$("<div>").html(rw_badge(doc.status, RW_REPORT_STATUS_HEX[doc.status])).appendTo($head);
+
+		if (doc.notes) {
+			$('<div class="rw-notes">').text(doc.notes).appendTo(this.$report_card);
+		}
+
+		this.$summary_wrap = $("<div>").appendTo(this.$report_card);
+
+		const $actions = $('<div class="rw-toolbar" style="margin-top:14px">').appendTo(this.$report_card);
+
+		this.$toggle_status_btn = $(`<button class="rw-btn"></button>`).appendTo($actions);
+		this.$toggle_status_btn.text(doc.status === "Draft" ? __("Issue Report") : __("Reopen to Draft"));
+		this.$toggle_status_btn.on("click", () => this.toggle_status());
+
+		$(`<button class="rw-btn">${__("Print Report")}</button>`)
+			.appendTo($actions)
+			.on("click", () => frappe.set_route("print", "Inspection Report", this.report));
+
+		$(`<button class="rw-btn">${__("Open Full Form")}</button>`)
+			.appendTo($actions)
+			.on("click", () => frappe.set_route("Form", "Inspection Report", this.report));
+	}
+
+	toggle_status() {
+		const next_status = this.report_doc.status === "Draft" ? "Issued" : "Draft";
+		this.$toggle_status_btn.prop("disabled", true);
+		frappe
+			.call({
+				method: "frappe.client.set_value",
+				args: { doctype: "Inspection Report", name: this.report, fieldname: { status: next_status } },
+			})
+			.then((r) => {
+				this.report_doc.status = r.message.status;
+				frappe.show_alert({
+					message: r.message.status === "Issued" ? __("Report issued") : __("Report reopened to Draft"),
+					indicator: "green",
+				});
+				this.render_report_header();
+				this.load_recent_reports();
+			})
+			.always(() => this.$toggle_status_btn.prop("disabled", false));
+	}
+
+	load_summary() {
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: { report: this.report },
+					fields: ["severity", "count(name) as total"],
+					group_by: "severity",
+				},
+			})
+			.then((r) => this.render_summary(r.message || []));
+	}
+
+	render_summary(rows) {
+		this.$summary_wrap.empty();
+		const total = rows.reduce((sum, row) => sum + row.total, 0);
+		if (!total) return;
+
+		const $bar = $('<div class="rw-summary-bar">').appendTo(this.$summary_wrap);
+		const $legend = $('<div class="rw-summary-legend">').appendTo(this.$summary_wrap);
+
+		RW_SEVERITY_OPTIONS.forEach((sev) => {
+			const row = rows.find((r) => r.severity === sev);
+			if (!row || !row.total) return;
+			const pct = (row.total / total) * 100;
+			$(`<div class="rw-summary-seg" style="width:${pct}%;background:${RW_SEVERITY_HEX[sev]}">`).appendTo($bar);
+			const $item = $('<div class="rw-summary-legend-item">').appendTo($legend);
+			$('<span class="rw-summary-dot">').css("background", RW_SEVERITY_HEX[sev]).appendTo($item);
+			$("<span>").text(`${sev}: ${row.total}`).appendTo($item);
+		});
+	}
+
+	// ---- sheets: every equipment covered by this report ------------------------
+
+	render_sheets_card() {
+		this.$sheets_card = $('<div class="rw-card">').appendTo(this.$workbench);
+		const $toolbar = $('<div class="rw-toolbar" style="justify-content:space-between;margin-bottom:14px">').appendTo(
+			this.$sheets_card
+		);
+		$(`<div class="rw-recent-title">${__("Equipment Sheets")}</div>`).appendTo($toolbar);
+
+		const $buttons = $('<div class="rw-toolbar">').appendTo($toolbar);
+		this.$bulk_btn = $(`<button class="rw-btn">${__("Create Equipment Sheets")}</button>`).appendTo($buttons);
+		this.$bulk_btn.on("click", () => this.create_all_sheets());
+
+		this.$new_finding_btn = $(`<button class="rw-btn rw-btn-primary">${__("New Finding")}</button>`).appendTo($buttons);
+		this.$new_finding_btn.on("click", () => this.open_equipment_picker());
+
+		this.$sheets_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$sheets_card);
+	}
+
+	load_sheets() {
+		this.$sheets_table_wrap.html(`<div class="rw-empty">${__("Loading...")}</div>`);
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: { report: this.report },
+					fields: [
+						"name",
+						"equipment",
+						"equipment_description",
+						"severity",
+						"suggested_severity",
+						"action_status",
+						"defects",
+					],
+					order_by: "equipment_description",
+					limit_page_length: 0,
+				},
+			})
+			.then((r) => {
+				this.sheet_rows = r.message || [];
+				this.render_sheets_table();
+			});
+	}
+
+	render_sheets_table() {
+		const rows = this.sheet_rows;
+		this.$sheets_table_wrap.empty();
+		if (!rows.length) {
+			this.$sheets_table_wrap.html(
+				`<div class="rw-empty">${__('No sheets yet. Use "Create Equipment Sheets" or "New Finding" to start.')}</div>`
+			);
+			return;
+		}
+
+		const $table = $('<table class="rw-table">').appendTo(this.$sheets_table_wrap);
+		$table.append(
+			`<thead><tr><th>${__("Equipment")}</th><th>${__("Severity")}</th><th>${__("Suggested")}</th><th>${__(
+				"Status"
+			)}</th><th>${__("Defects")}</th></tr></thead>`
+		);
+		const $tbody = $("<tbody>").appendTo($table);
+		rows.forEach((row) => {
+			const $tr = $("<tr>").appendTo($tbody);
+			$("<td>").text(row.equipment_description || row.equipment).appendTo($tr);
+			$("<td>").html(row.severity ? rw_badge(row.severity, RW_SEVERITY_HEX[row.severity]) : "").appendTo($tr);
+			$("<td>")
+				.html(
+					row.suggested_severity && row.suggested_severity !== row.severity
+						? rw_badge(row.suggested_severity, RW_SEVERITY_HEX[row.suggested_severity])
+						: ""
+				)
+				.appendTo($tr);
+			$("<td>").html(row.action_status ? rw_badge(row.action_status, RW_STATUS_HEX[row.action_status]) : "").appendTo($tr);
+			$("<td class='rw-ellipsis'>").attr("title", row.defects || "").text(row.defects || "").appendTo($tr);
+			$tr.on("click", () => frappe.set_route("Form", "Equipment Inspection", row.name));
+		});
+	}
+
+	create_all_sheets() {
+		this.$bulk_btn.prop("disabled", true).text(__("Creating..."));
+		frappe
+			.call({ method: "manutencao_preditiva.inspection_api.create_equipment_sheets", args: { report: this.report } })
+			.then((r) => {
+				const created = r.message || 0;
+				frappe.show_alert({
+					message: created
+						? __("{0} sheets created", [created])
+						: __("Every active equipment in this area already has a sheet"),
+					indicator: created ? "green" : "blue",
+				});
+				this.load_sheets();
+				this.load_summary();
+			})
+			.always(() => this.$bulk_btn.prop("disabled", false).text(__("Create Equipment Sheets")));
+	}
+
+	// Excludes equipment that already has a sheet in this report - the
+	// server would reject it anyway (Equipment Inspection.
+	// validate_unique_in_report()), this just avoids the round-trip.
+	open_equipment_picker() {
+		const doc = this.report_doc;
+		const used = new Set(this.sheet_rows.map((row) => row.equipment));
+
+		const dialog = new frappe.ui.Dialog({
+			title: __("New Finding"),
+			fields: [
+				{
+					fieldtype: "Link",
+					fieldname: "equipment",
+					label: __("Equipment"),
+					options: "Equipment",
+					reqd: 1,
+					get_query: () => ({
+						filters: [
+							["customer", "=", doc.customer],
+							["area", "=", doc.area],
+							["disabled", "=", 0],
+							...(used.size ? [["name", "not in", Array.from(used)]] : []),
+						],
+					}),
+				},
+			],
+			primary_action_label: __("Create Sheet"),
+			primary_action: (values) => {
+				dialog.get_primary_btn().prop("disabled", true);
+				frappe
+					.call({
+						method: "frappe.client.insert",
+						args: { doc: { doctype: "Equipment Inspection", report: this.report, equipment: values.equipment } },
+					})
+					.then((r) => {
+						dialog.hide();
+						frappe.set_route("Form", "Equipment Inspection", r.message.name);
+					})
+					.always(() => dialog.get_primary_btn().prop("disabled", false));
+			},
+		});
+		dialog.show();
+	}
+};

@@ -1,0 +1,23 @@
+{
+ "creation": "2026-09-23 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Manutencao Preditiva",
+ "name": "report-workbench",
+ "owner": "Administrator",
+ "page_name": "report-workbench",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Tecnico de Inspecao"
+  }
+ ],
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Report Workbench"
+}

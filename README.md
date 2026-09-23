@@ -96,6 +96,39 @@ own Customer - they see and update only their own findings, never another
 client's. Roles: **Tecnico de Inspecao** (internal team, full access) and
 **Cliente Portal** (read + respond only).
 
+### Report Workbench (page)
+
+`/app/report-workbench` - the hub that ties the whole Inspection Report
+system together: pick or create a report, see its status/team/instrument,
+its severity summary, and every Equipment Inspection sheet in it in one
+table, all in one page.
+
+- **Recent Reports** table below the picker - search by customer/area/
+  period, filter by Draft/Issued, click a row to load it. **+ New Report**
+  opens a creation dialog (customer, area filtered by that customer, date,
+  team, instrument) instead of leaving the page.
+- Once a report is loaded: **Issue Report** / **Reopen to Draft** toggles
+  its status (the same `validate_can_be_issued()` rule applies - every
+  sheet needs a severity first), **Print Report** opens Frappe's native
+  print preview for it (`frappe.set_route("print", ...)`, so it works with
+  any print format later added, not just Vibration Report), **Open Full
+  Form** goes to the report's own Desk form for editing its metadata
+  (service reference, site address, notes, ...) - this page doesn't
+  duplicate those fields.
+- **Create Equipment Sheets** (bulk) and **New Finding** (single equipment,
+  excludes equipment that already has a sheet here) sit right above the
+  sheets table.
+- Clicking a sheet in the table navigates to its native Equipment
+  Inspection form - **on purpose**, not an inline dialog. That form already
+  auto-fills the readings table the moment you pick an equipment (see
+  `equipment_inspection.js`), and Quick Finding Entry already has its own
+  editing dialog; a third hand-built copy of that same UI here would be a
+  third thing to keep in sync with no bench to verify any of them against.
+  This page's job is the overview and the connections between the pieces,
+  not re-implementing data entry.
+
+Staff-only (System Manager / Tecnico de Inspecao) - not client-facing.
+
 ### Quick Finding Entry / Registo Rápido de Achados (page)
 
 Dedicated page for a técnico to log findings quickly in the field, at
@@ -179,8 +212,9 @@ Two Workspaces (visible per the user's role, via `roles`):
 - **Manutenção Preditiva** — the internal workspace, visible to **System
   Manager** and **Tecnico de Inspecao**, ordered as **Setup** (Vibration
   Alarm Settings, Area, Equipment) → **Workflow**
-  (Quick Finding Entry, Inspection Report, Equipment Inspection, Action
-  Tracker) → **Client Portal** (shortcut to the client view) → **Legacy
+  (Report Workbench, Quick Finding Entry, Inspection Report, Equipment
+  Inspection, Action Tracker) → **Client Portal** (shortcut to the client
+  view) → **Legacy
   Data (Portuguese model)** (Campanha/Achado/Área/Equipamento and their old
   reports, demoted to the bottom since nothing writes to them anymore).
 - **Portal do Cliente** — direct shortcut to the "My Findings" page. Has to

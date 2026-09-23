@@ -72,13 +72,25 @@
    "doctype": "Workspace Link",
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Report Workbench",
+   "link_count": 0,
+   "link_to": "report-workbench",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link",
+   "idx": 6
+  },
+  {
+   "doctype": "Workspace Link",
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Quick Finding Entry",
    "link_count": 0,
    "link_to": "registo-rapido-de-achados",
    "link_type": "Page",
    "onboard": 0,
    "type": "Link",
-   "idx": 6
+   "idx": 7
   },
   {
    "doctype": "Workspace Link",
@@ -90,7 +102,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 7
+   "idx": 8
   },
   {
    "doctype": "Workspace Link",
@@ -102,7 +114,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 8
+   "idx": 9
   },
   {
    "doctype": "Workspace Link",
@@ -114,7 +126,7 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link",
-   "idx": 9
+   "idx": 10
   },
   {
    "doctype": "Workspace Link",
@@ -124,7 +136,7 @@
    "link_count": 0,
    "onboard": 0,
    "type": "Card Break",
-   "idx": 10
+   "idx": 11
   },
   {
    "doctype": "Workspace Link",
@@ -136,7 +148,7 @@
    "link_type": "Page",
    "onboard": 0,
    "type": "Link",
-   "idx": 11
+   "idx": 12
   },
   {
    "doctype": "Workspace Link",
@@ -146,7 +158,7 @@
    "link_count": 0,
    "onboard": 0,
    "type": "Card Break",
-   "idx": 12
+   "idx": 13
   },
   {
    "doctype": "Workspace Link",
@@ -158,7 +170,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 13
+   "idx": 14
   },
   {
    "doctype": "Workspace Link",
@@ -170,7 +182,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 14
+   "idx": 15
   },
   {
    "doctype": "Workspace Link",
@@ -182,7 +194,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 15
+   "idx": 16
   },
   {
    "doctype": "Workspace Link",
@@ -194,7 +206,7 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
-   "idx": 16
+   "idx": 17
   },
   {
    "doctype": "Workspace Link",
@@ -206,7 +218,7 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link",
-   "idx": 17
+   "idx": 18
   },
   {
    "doctype": "Workspace Link",
@@ -218,7 +230,7 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link",
-   "idx": 18
+   "idx": 19
   }
  ],
  "modified": "2026-09-13 00:00:00.000000",
