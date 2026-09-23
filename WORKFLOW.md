@@ -42,34 +42,31 @@ client - only touch it if the actual thresholds change. Also under Setup.
 
 ## 2. The repeatable cycle, per visit/month
 
-The **Workflow** block in the same workspace. **Report Workbench** is the
-starting point - pick or create the report there, see its whole picture
-(status, severity summary, every sheet) in one place, and jump anywhere
-else you need from it:
+Everything below happens in **Report Workbench**, the single staff-side
+page for this (Quick Finding Entry, an earlier separate page for the same
+job, was retired 2026-09-23 once this page did everything it did and more
+- see README):
 
-1. In **Report Workbench**: pick an existing report from Recent Reports, or
-   **+ New Report** (customer, area, date, team, instrument). Starts as
-   **Draft**.
-2. **Create the sheets**, either:
-   - **Create Equipment Sheets** in the Workbench (bulk - one empty sheet
-     per active equipment in that area), or
-   - **Quick Finding Entry**, the técnico's field-entry page: pick the
-     (Draft) report, **Create Equipment Sheets** there for the same bulk
-     effect, or **New Finding** to add one equipment on the spot.
+1. Pick an existing report from **Recent Reports** (search by customer/
+   area/period, filter Draft/Issued), or **+ New Report** (customer, area,
+   date, team, instrument). Starts as **Draft**.
+2. **Create the sheets**: **Create Equipment Sheets** for one empty sheet
+   per active equipment in the report's area in one go, or **New Sheet**
+   for a single equipment (useful for one added mid-round) - either way
+   opens straight into editing.
 3. **Enter readings.** Each sheet already lists its equipment's points; the
    técnico types velocity (mm/s), acceleration (g's), temperature per
    point. Severity is computed the moment it's saved - not set manually.
-   Click a sheet in the Workbench's table (or use Quick Finding Entry) to
-   open it.
+   Click any sheet in the table (or Cards view - there's a toggle, plus a
+   search box and severity chips over whatever's loaded) to open it.
 4. **Add the diagnosis.** Defects found, recommendations, actions taken,
-   photos. If the readings alone don't tell the full story (e.g. a bearing
-   defect visible in the spectrum), tick **Override suggested severity**
-   and pick the real severity - otherwise it keeps following the numbers.
-5. Repeat per equipment. Quick Finding Entry is the fast path for entering
-   numbers; the Workbench's sheet table is the fast path for seeing where
-   everything stands and jumping to any sheet; the full Equipment
-   Inspection form covers anything neither shortcut does (multiple photos,
-   more detail).
+   photos (a gallery - add several, caption each one). If the readings
+   alone don't tell the full story (e.g. a bearing defect visible in the
+   spectrum), tick **Override suggested severity** and pick the real
+   severity - otherwise it keeps following the numbers.
+5. Repeat per equipment. The full Equipment Inspection form ("Open Full
+   Form" inside the dialog) covers anything the Workbench's dialog doesn't
+   (more than one new photo per save, more detail).
 
 ## 3. Finishing
 
@@ -121,7 +118,8 @@ portal, all reading the same sheets. Nothing entered twice.
   reasoned through, not exercised against actual Frappe permission checks.
 - [ ] **Report Workbench needs a full click-through.** One bug already
   found and fixed there (see below); the picker, New Report dialog,
-  toggling Issue/Draft, Create Equipment Sheets, New Sheet, and Print
+  toggling Issue/Draft, Create Equipment Sheets, New Sheet, the sheet
+  editor dialog (readings, gallery), search/chips/Cards view, and Print
   Report are otherwise still unverified against the real bench.
 - [ ] **The Issue-lock (2026-09-23) needs a real save, not just the mock
   test.** `test_equipment_inspection_lock.py` covers the logic against a
@@ -138,20 +136,15 @@ portal, all reading the same sheets. Nothing entered twice.
   order didn't matter. If a new query hits this again, that's the fix.
 
 ### Known gaps (deliberate scope cuts, not bugs)
-- [ ] **Report Workbench's sheet dialog needs a click-through too** -
-  brand new (2026-09-23), adapted from Quick Finding Entry's editor but
-  never run - readings, diagnosis, and now the image gallery (add/remove/
-  caption, multiple photos) all included. "Open Full Form" inside the
-  dialog is the way to anything it doesn't cover.
-- [x] ~~Quick Finding Entry: one image per edit session~~ Fixed 2026-09-23:
-  both Quick Finding Entry and Report Workbench's sheet dialogs now have a
-  real gallery editor (thumbnails, per-image caption, remove, click to
-  open full size) - not a native Frappe Table control (same reasoning as
-  the readings grid below), a hand-built one built once and reused across
-  both pages.
-- [ ] **Quick Finding Entry's readings grid is hand-built inputs**, not a
-  native Frappe Table control - lower risk without a bench to test
-  against, but less capable (e.g. can't add/remove points from there).
+- [ ] **Report Workbench's sheet dialog is one hand-built editor now
+  covering everything** - readings, diagnosis, a real image gallery
+  (add/remove/caption, multiple photos), search/severity-chip filtering,
+  and a Table/Cards toggle, all ported into this one page once Quick
+  Finding Entry was retired (2026-09-23). None of it has been clicked
+  through on the real bench yet (see above).
+- [ ] **The readings grid is hand-built inputs**, not a native Frappe
+  Table control - lower risk without a bench to test against, but less
+  capable (e.g. can't add/remove points from there).
 - [ ] **My Findings dropped two things** the old Achado had:
   "Componente / Localização do Defeito" and "Plano de Monitorização". The
   card thumbnail stays gone by design (multiple images per sheet now, no
@@ -160,9 +153,9 @@ portal, all reading the same sheets. Nothing entered twice.
 - [ ] **Native Equipment Inspection form's "Images" field is untouched** -
   it's a plain Frappe Table grid (already supports multiple rows, each
   with its own image + caption), just not styled as a gallery. Left as-is:
-  it's the power-user fallback ("Open Full Form" from both dialogs), and
-  reskinning a native grid's rendering is more invasive than the two
-  hand-built editors above.
+  it's the power-user fallback ("Open Full Form" from the sheet dialog),
+  and reskinning a native grid's rendering is more invasive than the
+  hand-built editor above.
 - [ ] **Only vibration is built.** Thermography (the other Excel tracker,
   FR.TEC.016) and any other technique need their own Word report examined
   the same way `relatorio 1.pdf` was, plus their thresholds.

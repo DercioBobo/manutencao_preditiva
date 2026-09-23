@@ -4,15 +4,20 @@
 // The "see everything interlinked" hub: pick or create an Inspection
 // Report, see its whole team-facing picture in one place - status, severity
 // summary, every Equipment Inspection sheet in it - and jump to the PDF.
+// This is now the only staff-side entry point for technical data entry -
+// Quick Finding Entry (Registo Rápido de Achados) was retired 2026-09-23
+// once this page could do everything it did and more (report creation,
+// browsing Issued reports too, status/print actions); its two features
+// this page didn't already have - search/severity-chip filtering and a
+// Cards view - were ported in below rather than left behind, and its
+// equipment-picker + readings/diagnosis/gallery editor were the starting
+// point for this page's own (see render_sheets_card()/open_sheet_dialog()).
 //
 // Clicking a sheet opens it in a Dialog right here, not a page navigation -
-// the readings editor, diagnosis fields and save logic below are adapted
-// from Quick Finding Entry's (registo_rapido_de_achados.js) rather than
-// invented fresh, so this is still only the SECOND editing surface in the
-// app, not a third: the native Equipment Inspection form (full-featured,
+// so there's still only ONE editing surface for a sheet's technical
+// content, not two: the native Equipment Inspection form (full-featured,
 // linked from "Open Full Form" inside the dialog for anything this lighter
-// editor doesn't cover, e.g. more than one new image) and this shared
-// Dialog pattern, now used by both this page and Quick Finding Entry.
+// editor doesn't cover, e.g. more than one new image) and this Dialog.
 // A real side panel or a second full page were both considered and
 // rejected - a Dialog is a well-worn Frappe component, and hand-building
 // panel positioning/animation with no bench to preview it against was not
@@ -63,6 +68,9 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.report = null;
 		this.report_doc = null;
 		this.sheet_rows = [];
+		this.sheets_view_mode = "table";
+		this.sheets_search = "";
+		this.sheets_severity_filter = "all";
 		this.recent_rows = [];
 		this.recent_status_filter = "all";
 		this.recent_search = "";
@@ -393,7 +401,38 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		// just says so before they click instead of only after.
 		this.$sheets_lock_note = $('<div class="rw-notes" style="margin-bottom:10px"></div>').appendTo(this.$sheets_card);
 
+		// Search + severity chips (client-side, over whatever's already
+		// loaded) and a Table/Cards toggle - ported from Quick Finding
+		// Entry when that page was retired, rather than left behind.
+		const $filter_row = $('<div class="rw-picker-row" style="margin-bottom:14px">').appendTo(this.$sheets_card);
+		this.$sheets_search = $(
+			`<input type="text" class="rw-search" placeholder="${__("Search by equipment, description...")}">`
+		).appendTo($filter_row);
+		this.$sheets_search.on("input", () => {
+			this.sheets_search = (this.$sheets_search.val() || "").toLowerCase().trim();
+			this.render_sheets_view();
+		});
+
+		this.$sheets_chips = $('<div class="rw-chips">').appendTo($filter_row);
+		[["all", __("All")]].concat(RW_SEVERITY_OPTIONS.map((s) => [s, s])).forEach(([key, label]) => {
+			const $chip = $(`<button class="rw-chip" data-key="${key}">${label}</button>`).appendTo(this.$sheets_chips);
+			if (key === "all") $chip.addClass("active");
+			$chip.on("click", () => {
+				this.sheets_severity_filter = key;
+				this.$sheets_chips.find(".rw-chip").removeClass("active");
+				$chip.addClass("active");
+				this.render_sheets_view();
+			});
+		});
+
+		const $view_toggle = $('<div class="rw-view-toggle">').appendTo($filter_row);
+		this.$sheets_table_btn = $(`<button class="rw-view-btn">${__("Table")}</button>`).appendTo($view_toggle);
+		this.$sheets_cards_btn = $(`<button class="rw-view-btn">${__("Cards")}</button>`).appendTo($view_toggle);
+		this.$sheets_table_btn.on("click", () => this.switch_sheets_view("table"));
+		this.$sheets_cards_btn.on("click", () => this.switch_sheets_view("cards"));
+
 		this.$sheets_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$sheets_card);
+		this.$sheets_cards_wrap = $('<div class="rw-sheet-cards">').appendTo(this.$sheets_card).hide();
 	}
 
 	render_sheets_lock_note() {
@@ -401,6 +440,15 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$sheets_lock_note
 			.toggle(locked)
 			.text(locked ? __("This report is Issued - sheets are locked. Reopen to Draft to edit them.") : "");
+	}
+
+	switch_sheets_view(mode) {
+		this.sheets_view_mode = mode;
+		const is_cards = mode === "cards";
+		this.$sheets_cards_btn.toggleClass("active", is_cards);
+		this.$sheets_table_btn.toggleClass("active", !is_cards);
+		this.$sheets_cards_wrap.toggle(is_cards);
+		this.$sheets_table_wrap.toggle(!is_cards);
 	}
 
 	load_sheets() {
@@ -420,6 +468,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 						"suggested_severity",
 						"action_status",
 						"defects",
+						"creation",
 					],
 					order_by: "equipment_description",
 					limit_page_length: 0,
@@ -427,17 +476,42 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			})
 			.then((r) => {
 				this.sheet_rows = r.message || [];
-				this.render_sheets_table();
+				this.render_sheets_view();
 			});
 	}
 
+	get_filtered_sheet_rows() {
+		return this.sheet_rows.filter((row) => {
+			if (this.sheets_severity_filter !== "all" && row.severity !== this.sheets_severity_filter) return false;
+			if (!this.sheets_search) return true;
+			const haystack = [row.equipment_description || row.equipment, row.defects, row.severity]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase();
+			return haystack.includes(this.sheets_search);
+		});
+	}
+
+	render_sheets_view() {
+		if (this.sheets_view_mode === "cards") {
+			this.render_sheets_cards();
+		} else {
+			this.render_sheets_table();
+		}
+	}
+
 	render_sheets_table() {
-		const rows = this.sheet_rows;
+		const all_rows = this.sheet_rows;
+		const rows = this.get_filtered_sheet_rows();
 		this.$sheets_table_wrap.empty();
-		if (!rows.length) {
+		if (!all_rows.length) {
 			this.$sheets_table_wrap.html(
 				`<div class="rw-empty">${__('No sheets yet. Use "Create Equipment Sheets" or "New Sheet" to start.')}</div>`
 			);
+			return;
+		}
+		if (!rows.length) {
+			this.$sheets_table_wrap.html(`<div class="rw-empty">${__("No sheet matches the filter.")}</div>`);
 			return;
 		}
 
@@ -462,6 +536,42 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			$("<td>").html(row.action_status ? rw_badge(row.action_status, RW_STATUS_HEX[row.action_status]) : "").appendTo($tr);
 			$("<td class='rw-ellipsis'>").attr("title", row.defects || "").text(row.defects || "").appendTo($tr);
 			$tr.on("click", () => this.open_sheet_dialog(row.name));
+		});
+	}
+
+	render_sheets_cards() {
+		const all_rows = this.sheet_rows;
+		const rows = this.get_filtered_sheet_rows();
+		this.$sheets_cards_wrap.empty();
+		if (!all_rows.length) {
+			this.$sheets_cards_wrap.html(
+				`<div class="rw-empty">${__('No sheets yet. Use "Create Equipment Sheets" or "New Sheet" to start.')}</div>`
+			);
+			return;
+		}
+		if (!rows.length) {
+			this.$sheets_cards_wrap.html(`<div class="rw-empty">${__("No sheet matches the filter.")}</div>`);
+			return;
+		}
+
+		rows.forEach((row) => {
+			const $card = $('<div class="rw-sheet-card">').appendTo(this.$sheets_cards_wrap);
+			const $row = $('<div class="rw-sheet-card-row">').appendTo($card);
+
+			$row.append(row.severity ? rw_badge(row.severity, RW_SEVERITY_HEX[row.severity]) : rw_badge(__("No readings")));
+
+			const $main = $('<div class="rw-sheet-card-main">').appendTo($row);
+			$('<div class="rw-sheet-card-title">').text(row.equipment_description || row.equipment || "").appendTo($main);
+			$('<div class="rw-sheet-card-sub">').text(row.defects || "").appendTo($main);
+
+			const $meta = $('<div class="rw-sheet-card-meta">').appendTo($row);
+			if (row.action_status) $meta.append(rw_badge(row.action_status, RW_STATUS_HEX[row.action_status]));
+			if (row.suggested_severity && row.suggested_severity !== row.severity) {
+				$("<span>").text(__("suggestion: {0}", [row.suggested_severity])).appendTo($meta);
+			}
+			if (row.creation) $("<span>").html(comment_when(row.creation)).appendTo($meta);
+
+			$row.on("click", () => this.open_sheet_dialog(row.name));
 		});
 	}
 

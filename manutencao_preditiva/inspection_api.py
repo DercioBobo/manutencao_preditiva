@@ -1,8 +1,8 @@
 # Copyright (c) 2026, Dércio Bobo and contributors
 # For license information, please see license.txt
-"""Whitelisted entry points for Registo Rápido de Achados (page, not a
-Frappe form) - it can't call a Document's own whitelisted method the way a
-form does (frm.call), so this wraps the ones it needs.
+"""Whitelisted entry points for Report Workbench (page, not a Frappe form)
+- it can't call a Document's own whitelisted method the way a form does
+(frm.call), so this wraps the ones it needs.
 """
 
 import frappe

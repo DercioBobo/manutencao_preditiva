@@ -123,6 +123,97 @@
 	flex-wrap: wrap;
 }
 
+/* ---- table/cards view toggle (sheets list) -------------------------------- */
+
+.rw-view-toggle {
+	display: flex;
+	gap: 6px;
+	margin-left: auto;
+}
+
+.rw-view-btn {
+	border: 1px solid var(--rw-line);
+	background: var(--rw-surface);
+	color: var(--rw-muted);
+	border-radius: 8px;
+	padding: 6px 14px;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.rw-view-btn:hover {
+	background: var(--rw-surface-2);
+}
+
+.rw-view-btn.active {
+	background: var(--rw-accent);
+	border-color: var(--rw-accent);
+	color: #fff;
+}
+
+/* ---- sheet cards (Cards view) ---------------------------------------------- */
+
+.rw-sheet-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.rw-sheet-card {
+	background: var(--rw-surface);
+	border: 1px solid var(--rw-line);
+	border-radius: var(--rw-radius);
+	box-shadow: var(--rw-shadow);
+}
+
+.rw-sheet-card-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 12px 18px;
+	flex-wrap: wrap;
+	cursor: pointer;
+}
+
+.rw-sheet-card-row:hover {
+	background: var(--rw-surface-2);
+}
+
+.rw-sheet-card-main {
+	flex: 1 1 240px;
+	min-width: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.rw-sheet-card-title {
+	font-weight: 600;
+	color: var(--rw-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rw-sheet-card-sub {
+	color: var(--rw-muted);
+	font-size: 12px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rw-sheet-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--rw-muted);
+	font-size: 12px;
+	flex: 0 0 auto;
+}
+
 /* ---- generic table ---------------------------------------------------- */
 
 .rw-table-wrap {

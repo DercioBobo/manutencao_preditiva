@@ -65,8 +65,7 @@ that's exactly what's meant to be edited after Issue, by the client or by
 staff on their behalf. **Reopen to Draft** (Report Workbench) is the
 explicit way back into editing; there's no other override. Report
 Workbench shows a note above the sheets table when this applies, since its
-report picker (unlike Quick Finding Entry's) isn't limited to Draft
-reports.
+report picker isn't limited to Draft reports.
 
 The severity rules are plain Python in `manutencao_preditiva/vibration.py`,
 and this lock has its own test using a minimal frappe mock
@@ -81,10 +80,12 @@ python -m unittest manutencao_preditiva.tests.test_equipment_inspection_lock
 The Portuguese *doctypes* below (Campanha / Achado / Área / Equipamento) are
 the earlier, summary-level model, kept only so the historical data imported
 into them isn't lost until the user removes it - nothing new should be
-written there. Both pages that used to write to them, **My Findings** (Meus
-Achados) and **Quick Finding Entry** (Registo Rápido de Achados), have been
-ported and now read/write Equipment Inspection / Inspection Report instead
-(see their sections further down), with fully English UI - the old doctypes
+written there. The pages that used to write to them are gone: **My
+Findings** (ported from Meus Achados, still around - see its section) now
+reads Equipment Inspection / Inspection Report instead, and **Registo
+Rápido de Achados** (the técnico-facing one) was ported to **Quick Finding
+Entry** and then retired outright on 2026-09-23 once **Report Workbench**
+could do everything it did and more - see that section. The old doctypes
 exist without any still-active way to reach them through the UI.
 
 ## Modules (Portuguese, legacy)
@@ -115,9 +116,11 @@ client's. Roles: **Tecnico de Inspecao** (internal team, full access) and
 ### Report Workbench (page)
 
 `/app/report-workbench` - the hub that ties the whole Inspection Report
-system together: pick or create a report, see its status/team/instrument,
-its severity summary, and every Equipment Inspection sheet in it in one
-table, all in one page.
+system together, and the only staff-side page for technical data entry
+(Quick Finding Entry, its predecessor, was retired 2026-09-23 - see below):
+pick or create a report, see its status/team/instrument, its severity
+summary, and every Equipment Inspection sheet in it, and edit any of them,
+all in one page.
 
 - **Recent Reports** table below the picker - search by customer/area/
   period, filter by Draft/Issued, click a row to load it. **+ New Report**
@@ -132,77 +135,40 @@ table, all in one page.
   (service reference, site address, notes, ...) - this page doesn't
   duplicate those fields.
 - **Create Equipment Sheets** (bulk) and **New Sheet** (single equipment,
-  excludes equipment that already has a sheet here) sit right above the
-  sheets table. (Quick Finding Entry's equivalent button is called "New
-  Finding" instead - see below for why the two pages don't share that
-  word.)
-- Clicking a sheet in the table opens it in a **Dialog right there** -
-  readings table, diagnosis, an image **gallery** (thumbnails, one caption
-  field each, add/remove freely - not just one photo), and the same
-  "Override suggested severity" checkbox Quick Finding Entry has. That
-  editor is adapted from Quick Finding Entry's (`registo_rapido_de_achados.js`),
-  not a fresh build, so this is still only the *second* editing surface in
-  the app, not a third: the native Equipment Inspection form, and this
-  shared Dialog pattern now used by two pages. The dialog has its own
-  **Open Full Form** link for anything it doesn't cover. A real side panel
-  and a second full page were both considered and
-  rejected for this - see the file's header comment for why.
+  excludes equipment that already has a sheet here, opens straight into
+  editing since an empty sheet with no readings isn't useful on its own)
+  sit right above the sheets table, alongside a **search box**, **severity
+  chips**, and a **Table/Cards view toggle** over whatever's already
+  loaded.
+- Clicking a sheet - in either view - opens it in a **Dialog right there**:
+  a plain table (not a native Frappe grid, to reduce risk without a bench
+  to test against) with one row per measurement point - mm/s, g's, temp. -
+  pre-filled from the equipment's configured points; diagnosis fields; an
+  image **gallery** (thumbnails, one caption each, add/remove freely, click
+  to open full size); and an "Override suggested severity" checkbox for
+  cases where the diagnosis (e.g. a bearing defect seen in the spectrum) is
+  worse than the readings alone indicate - otherwise severity keeps
+  following the readings automatically (`vibration.py`). Saves via
+  `frappe.client.set_value` (not `insert`) once the sheet exists - real
+  validation still happens in the Equipment Inspection controller. The
+  dialog's own **Open Full Form** link covers anything it doesn't (e.g.
+  more detail). A real side panel and a second full page were both
+  considered for this dialog and rejected - see the file's header comment
+  for why.
 
 Staff-only (System Manager / Tecnico de Inspecao) - not client-facing.
 
-### Quick Finding Entry / Registo Rápido de Achados (page)
-
-Dedicated page for a técnico to log findings quickly in the field, at
-`/app/registo-rapido-de-achados` (also reachable through the awesomebar,
-e.g. `Ctrl+G` → "Quick Finding Entry"). **Ported** - reads and writes
-Equipment Inspection / Inspection Report, not the old Achado De Inspecao /
-Campanha De Inspecao. UI is fully English now, like My Findings.
-
-**Why this page says "Finding" while Report Workbench says "Sheet"** for
-the exact same kind of record (Equipment Inspection): this page and My
-Findings are ported from the old Portuguese pages and deliberately kept
-"Finding"/"Achado" wording for técnico and client continuity with what
-they already knew; Report Workbench and the Inspection Report/Equipment
-Inspection forms were built fresh with no legacy wording to protect, so
-they use "Sheet" - matching the doctype's own concept. Two vocabularies,
-split cleanly by which pages are ported vs newly built, not a typo.
-
-Structural change from the old flow: a finding is no longer a free-form
-entry (a técnico used to be able to log several separate findings for the
-same equipment in one campanha); it's now **one sheet per equipment per
-report** (Equipment Inspection), with a readings table per measurement
-point - reflecting the real structure of the Word report. "New Finding"
-here creates/opens that sheet, not a standalone entry:
-
-- Pick a **Report** (only ones in **Draft** show up - once **Issued**,
-  editing moves to the full sheet form). Since the area is now fixed per
-  report (not chosen per finding like before), a técnico covering several
-  areas in one visit needs one report per area.
-- **Create Equipment Sheets** creates, in one go, an empty sheet for every
-  active equipment in the report's area (reuses the same button that
-  already exists on the Inspection Report form). **New Finding** creates a
-  sheet for a single equipment (useful for one added mid-round) and opens
-  it straight into editing - an empty sheet with no readings isn't useful
-  on its own.
-- Editing shows a plain table (not a native Frappe grid, to reduce risk
-  without a bench to test against) with one row per point - mm/s, g's,
-  temp. - pre-filled from the equipment's configured measurement points.
-  Severity is **suggested automatically** from the readings (`vibration.py`,
-  same as the rest of the system) and is only editable through an "Override
-  suggested severity" checkbox, for cases where the diagnosis (e.g. a
-  bearing defect seen in the spectrum) is worse than the readings alone
-  indicate.
-- **Image gallery** built the same way as the readings table - a hand-built
-  grid, not a native Table-fieldtype control. Each photo is a thumbnail with
-  its own caption input and a remove button; adding one keeps every photo
-  already there instead of replacing it. Click a thumbnail to open it full
-  size in a new tab. (Originally scoped to one photo per edit session -
-  extended to a real gallery once the same pattern was reused in Report
-  Workbench.)
-- Saves via `frappe.client.set_value` (not `insert`) once the sheet exists
-  - real validation still happens in the Equipment Inspection controller
-  (severity, previous readings, etc.), the same path used by any other way
-  of editing the document.
+**Quick Finding Entry / Registo Rápido de Achados**, the técnico's
+original field-entry page, was ported the same way My Findings was (see
+below) but then retired outright once Report Workbench could do everything
+it did - creating sheets in bulk or one at a time, the same readings/
+diagnosis/gallery editor, search and severity-chip filtering, a Cards view
+- plus report creation, browsing Issued reports, and the status/print
+actions Quick Finding Entry never had. Keeping two pages that both create
+and edit sheets meant keeping the *same* editor code in sync in two places
+(this already happened more than once); retiring one removes that tax.
+Nothing has been deployed yet, so there was no rollout/bookmark cost to
+retiring it - see `WORKFLOW.md` if that calculus changes later.
 
 ### My Findings / Meus Achados (client portal)
 
@@ -223,6 +189,14 @@ Reads Equipment Inspection / Inspection Report (not the old Achado De
 Inspecao / Campanha De Inspecao). A finding only appears here once its
 Inspection Report is **Issued** - enforced server-side
 (`manutencao_preditiva/permissions.py`), not just in this page's query.
+
+**Why this page says "Finding" while the rest of the app says "Sheet"** for
+the exact same kind of record (Equipment Inspection): this page is ported
+from the old Portuguese Meus Achados and deliberately kept
+"Finding"/"Achado" wording for client continuity with what they already
+knew; everything else was built fresh with no legacy wording to protect,
+so it uses "Sheet" - matching the doctype's own concept. One page,
+deliberately, not an inconsistency.
 
 UI is fully English - severity and status are stored in English
 (`Normal`/`Acceptable`/`Alarm`/`Critical`/`Not Collected`,
@@ -245,8 +219,8 @@ Two Workspaces (visible per the user's role, via `roles`):
 - **Manutenção Preditiva** — the internal workspace, visible to **System
   Manager** and **Tecnico de Inspecao**, ordered as **Setup** (Vibration
   Alarm Settings, Area, Equipment) → **Workflow**
-  (Report Workbench, Quick Finding Entry, Inspection Report, Equipment
-  Inspection, Action Tracker) → **Client Portal** (shortcut to the client
+  (Report Workbench, Inspection Report, Equipment Inspection, Action
+  Tracker) → **Client Portal** (shortcut to the client
   view) → **Legacy
   Data (Portuguese model)** (Campanha/Achado/Área/Equipamento and their old
   reports, demoted to the bottom since nothing writes to them anymore).
