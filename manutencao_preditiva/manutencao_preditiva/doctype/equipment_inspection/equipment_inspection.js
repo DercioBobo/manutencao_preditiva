@@ -16,6 +16,27 @@ frappe.ui.form.on("Equipment Inspection", {
 		}));
 	},
 
+	// Server-side (prepare_readings()) only builds the readings table on
+	// save, for a brand-new sheet - so without this, picking an equipment
+	// shows nothing to type into until you save once. Mirrors that same
+	// "new + still empty" condition here, just eagerly, so there's always
+	// something on screen the moment an equipment is chosen.
+	equipment(frm) {
+		if (!frm.is_new() || (frm.doc.readings || []).length || !frm.doc.equipment) return;
+
+		const equipment = frm.doc.equipment;
+		frappe.call({ method: "frappe.client.get", args: { doctype: "Equipment", name: equipment } }).then((r) => {
+			// The field may have changed again while this call was in flight.
+			if (frm.doc.equipment !== equipment) return;
+
+			frm.clear_table("readings");
+			(r.message.points || []).forEach((point) => {
+				frm.add_child("readings", { point: point.point_code });
+			});
+			frm.refresh_field("readings");
+		});
+	},
+
 	refresh(frm) {
 		if (frm.doc.severity) {
 			frm.page.set_indicator(__(frm.doc.severity), SEVERITY_INDICATOR[frm.doc.severity]);

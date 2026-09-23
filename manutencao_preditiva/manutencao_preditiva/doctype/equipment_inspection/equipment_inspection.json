@@ -104,7 +104,8 @@
   {
    "fieldname": "sb_readings",
    "fieldtype": "Section Break",
-   "label": "Readings"
+   "label": "Readings",
+   "depends_on": "eval:doc.equipment"
   },
   {
    "fieldname": "readings",
