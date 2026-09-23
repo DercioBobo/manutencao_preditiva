@@ -134,12 +134,24 @@ all in one page.
   Form** goes to the report's own Desk form for editing its metadata
   (service reference, site address, notes, ...) - this page doesn't
   duplicate those fields.
-- **Create Equipment Sheets** (bulk) and **New Sheet** (single equipment,
-  excludes equipment that already has a sheet here, opens straight into
-  editing since an empty sheet with no readings isn't useful on its own)
-  sit right above the sheets table, alongside a **search box**, **severity
-  chips**, and a **Table/Cards view toggle** over whatever's already
-  loaded.
+- **Create Equipment Sheets** opens a **checklist** (2026-09-23) - every
+  active equipment in the area without a sheet yet, all pre-checked;
+  uncheck anything not being inspected this round, then confirm. Which
+  equipment end up covered by a report was never recorded as its own fact
+  anywhere - it's always been inferred live from "same customer, same
+  area, not Disabled" - so there was no way to leave one out for a single
+  round short of disabling it outright. This is still the same live query
+  underneath (nothing new is stored), just a deliberate confirmation step
+  in front of it instead of silently creating for everyone. **New Sheet**
+  (single equipment, excludes equipment that already has a sheet here,
+  opens straight into editing since an empty sheet with no readings isn't
+  useful on its own) covers the one-off case. Both sit right above the
+  sheets table, alongside a **search box**, **severity chips**, and a
+  **Table/Cards view toggle** over whatever's already loaded. The native
+  Inspection Report form's own "Create Equipment Sheets" button
+  (`inspection_report.py`'s `create_sheets()`) still does the old
+  unconditional bulk-create with no checklist - consistent with that form
+  being the power-user escape hatch elsewhere in this app too.
 - Clicking a sheet - in either view - opens it in a **Dialog right there**:
   a plain table (not a native Frappe grid, to reduce risk without a bench
   to test against) with one row per measurement point - mm/s, g's, temp. -

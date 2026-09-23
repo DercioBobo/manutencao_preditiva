@@ -584,22 +584,124 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		});
 	}
 
+	// Which equipment get a sheet is decided here, deliberately, not just
+	// "every active equipment in the area" happening silently - that used
+	// to be the whole rule (a live query, nothing ever recorded as "this
+	// equipment belongs to this report"), with no way to leave one out for
+	// a single round short of disabling it outright. This still starts
+	// from the same live query, but now as a checklist someone confirms
+	// (or trims) before anything is created.
 	create_all_sheets() {
-		this.$bulk_btn.prop("disabled", true).text(__("Creating..."));
+		this.$bulk_btn.prop("disabled", true).text(__("Loading..."));
 		frappe
-			.call({ method: "manutencao_preditiva.inspection_api.create_equipment_sheets", args: { report: this.report } })
-			.then((r) => {
-				const created = r.message || 0;
-				frappe.show_alert({
-					message: created
-						? __("{0} sheets created", [created])
-						: __("Every active equipment in this area already has a sheet"),
-					indicator: created ? "green" : "blue",
-				});
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Equipment",
+					filters: { customer: this.report_doc.customer, area: this.report_doc.area, disabled: 0 },
+					fields: ["name", "machine", "description"],
+					order_by: "machine, description",
+					limit_page_length: 0,
+				},
+			})
+			.then((r) => this.open_create_sheets_checklist(r.message || []))
+			.always(() => this.$bulk_btn.prop("disabled", false).text(__("Create Equipment Sheets")));
+	}
+
+	open_create_sheets_checklist(equipment_rows) {
+		const covered = new Set(this.sheet_rows.map((row) => row.equipment));
+		const pending = equipment_rows.filter((eq) => !covered.has(eq.name));
+
+		if (!pending.length) {
+			frappe.show_alert({
+				message: __("Every active equipment in this area already has a sheet"),
+				indicator: "blue",
+			});
+			return;
+		}
+
+		const dialog = new frappe.ui.Dialog({
+			title: __("Create Equipment Sheets"),
+			fields: [
+				{
+					fieldtype: "HTML",
+					fieldname: "checklist_intro",
+					options: `<div class="rw-checklist-intro"><span>${__(
+						"Every active equipment in this area without a sheet yet - uncheck any not being inspected this round."
+					)}</span><span><a href="#" class="rw-checklist-all">${__("All")}</a> / <a href="#" class="rw-checklist-none">${__(
+						"None"
+					)}</a></span></div>`,
+				},
+				{ fieldtype: "HTML", fieldname: "checklist_list", options: "" },
+			],
+			primary_action_label: __("Create Sheets"),
+			primary_action: () => this.confirm_create_sheets(dialog),
+		});
+
+		const $list = dialog.fields_dict.checklist_list.$wrapper;
+		pending.forEach((eq) => {
+			const label = [eq.machine, eq.description].filter(Boolean).join(" ") || eq.name;
+			$(`
+				<label class="rw-checklist-row">
+					<input type="checkbox" checked data-equipment="${frappe.utils.escape_html(eq.name)}">
+					<span>${frappe.utils.escape_html(label)}</span>
+				</label>
+			`).appendTo($list);
+		});
+
+		dialog.$wrapper.find(".rw-checklist-all").on("click", (e) => {
+			e.preventDefault();
+			$list.find("input[type=checkbox]").prop("checked", true);
+		});
+		dialog.$wrapper.find(".rw-checklist-none").on("click", (e) => {
+			e.preventDefault();
+			$list.find("input[type=checkbox]").prop("checked", false);
+		});
+
+		dialog.show();
+	}
+
+	confirm_create_sheets(dialog) {
+		const selected = [];
+		dialog.fields_dict.checklist_list.$wrapper.find("input[type=checkbox]:checked").each((_, el) => {
+			selected.push($(el).attr("data-equipment"));
+		});
+		if (!selected.length) {
+			frappe.show_alert({ message: __("Select at least one equipment"), indicator: "orange" });
+			return;
+		}
+
+		dialog.get_primary_btn().prop("disabled", true).text(__("Creating..."));
+
+		let created = 0;
+		// Sequential, not Promise.all - a failure (e.g. a genuine server-side
+		// rejection) should stop the batch and show Frappe's own error
+		// dialog, the same way any other single create in this app already
+		// behaves, rather than silently racing ahead on the rest.
+		selected
+			.reduce(
+				(chain, equipment) =>
+					chain.then(() =>
+						frappe
+							.call({
+								method: "frappe.client.insert",
+								args: { doc: { doctype: "Equipment Inspection", report: this.report, equipment } },
+							})
+							.then(() => {
+								created++;
+							})
+					),
+				Promise.resolve()
+			)
+			.then(() => {
+				dialog.hide();
+				frappe.show_alert({ message: __("{0} sheets created", [created]), indicator: "green" });
 				this.load_sheets();
 				this.load_summary();
 			})
-			.always(() => this.$bulk_btn.prop("disabled", false).text(__("Create Equipment Sheets")));
+			.finally(() => {
+				dialog.get_primary_btn().prop("disabled", false).text(__("Create Sheets"));
+			});
 	}
 
 	// Excludes equipment that already has a sheet in this report - the

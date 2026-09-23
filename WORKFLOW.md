@@ -50,10 +50,11 @@ job, was retired 2026-09-23 once this page did everything it did and more
 1. Pick an existing report from **Recent Reports** (search by customer/
    area/period, filter Draft/Issued), or **+ New Report** (customer, area,
    date, team, instrument). Starts as **Draft**.
-2. **Create the sheets**: **Create Equipment Sheets** for one empty sheet
-   per active equipment in the report's area in one go, or **New Sheet**
-   for a single equipment (useful for one added mid-round) - either way
-   opens straight into editing.
+2. **Create the sheets**: **Create Equipment Sheets** shows a checklist of
+   the area's active equipment without a sheet yet (pre-checked - uncheck
+   any not being done this round) and creates one empty sheet each; or
+   **New Sheet** for a single equipment (useful for one added mid-round) -
+   either way opens straight into editing.
 3. **Enter readings.** Each sheet already lists its equipment's points; the
    técnico types velocity (mm/s), acceleration (g's), temperature per
    point. Severity is computed the moment it's saved - not set manually.
@@ -125,9 +126,10 @@ portal, all reading the same sheets. Nothing entered twice.
   reasoned through, not exercised against actual Frappe permission checks.
 - [ ] **Report Workbench needs a full click-through.** One bug already
   found and fixed there (see below); the picker, New Report dialog,
-  toggling Issue/Draft, Create Equipment Sheets, New Sheet, the sheet
-  editor dialog (readings, gallery), search/chips/Cards view, and Print
-  Report are otherwise still unverified against the real bench.
+  toggling Issue/Draft, the Create Equipment Sheets checklist (brand new,
+  2026-09-23 - the sequential-insert loop in particular), New Sheet, the
+  sheet editor dialog (readings, gallery), search/chips/Cards view, and
+  Print Report are otherwise still unverified against the real bench.
 - [ ] **The Issue-lock (2026-09-23) needs a real save, not just the mock
   test.** `test_equipment_inspection_lock.py` covers the logic against a
   fake frappe (7 scenarios, all passing - see README), but nothing has
