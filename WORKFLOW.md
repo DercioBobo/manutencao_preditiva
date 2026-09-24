@@ -18,7 +18,7 @@ below.
 ```bash
 bench --site <site> migrate
 ```
-
+claude
 This creates the new doctypes and seeds **Vibration Alarm Settings** with
 the limits from the FR.TEC.09 report (via `after_install` on a fresh
 install, or the `seed_vibration_alarm_settings` patch on an existing site).
