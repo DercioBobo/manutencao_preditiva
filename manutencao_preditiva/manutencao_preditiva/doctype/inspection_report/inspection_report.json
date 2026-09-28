@@ -11,6 +11,7 @@
   "period_label",
   "cb_1",
   "status",
+  "readings_only",
   "service_reference",
   "site_address",
   "sb_team",
@@ -81,6 +82,14 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "description": "Clients only see a report once it is Issued."
+  },
+  {
+   "fieldname": "readings_only",
+   "fieldtype": "Check",
+   "label": "Readings Only",
+   "default": "0",
+   "in_standard_filter": 1,
+   "description": "History only - holds readings for the trend (e.g. the previous month taken from an imported Word report), with no diagnosis. Its sheets need no severity and are never shown to the client as findings."
   },
   {
    "fieldname": "service_reference",
@@ -156,7 +165,7 @@
    "link_fieldname": "report"
   }
  ],
- "modified": "2026-09-21 00:00:00.000000",
+ "modified": "2026-09-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Inspection Report",

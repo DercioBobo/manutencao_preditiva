@@ -142,6 +142,10 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.$new_btn = $(`<button class="rw-btn rw-btn-primary">${__("+ New Report")}</button>`).appendTo($row);
 		this.$new_btn.on("click", () => this.open_new_report_dialog());
 
+		$(`<button class="rw-btn">${__("Import Word")}</button>`)
+			.appendTo($row)
+			.on("click", () => this.open_import_dialog());
+
 		const $recent_toolbar = $('<div class="rw-recent-toolbar">').appendTo($card);
 		this.$recent_title = $(`<div class="rw-recent-title">${__("Recent Reports")}</div>`).appendTo($recent_toolbar);
 		this.$recent_toggle = $(`<a href="#" class="rw-recent-toggle"></a>`).appendTo($recent_toolbar);
@@ -216,7 +220,16 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				method: "frappe.client.get_list",
 				args: {
 					doctype: "Inspection Report",
-					fields: ["name", "customer", "area", "area.area_name as area_name", "period_label", "report_date", "status"],
+					fields: [
+						"name",
+						"customer",
+						"area",
+						"area.area_name as area_name",
+						"period_label",
+						"report_date",
+						"status",
+						"readings_only",
+					],
 					// "creation" alone is ambiguous once the area.area_name fetch joins
 					// in tabArea (it has its own creation column too) - qualify it.
 					order_by: "report_date desc, `tabInspection Report`.creation desc",
@@ -254,9 +267,193 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			const $tr = $("<tr>").appendTo($tbody);
 			$("<td>").text(row.customer || "").appendTo($tr);
 			$("<td>").text(row.area_name || row.area || "").appendTo($tr);
-			$('<td class="rw-mono">').text(row.period_label || "").appendTo($tr);
+			const $period = $('<td class="rw-mono">').text(row.period_label || "").appendTo($tr);
+			if (row.readings_only) $(`<span class="rw-tag">${__("readings only")}</span>`).appendTo($period);
 			$("<td>").html(rw_badge(row.status, RW_REPORT_STATUS_HEX[row.status])).appendTo($tr);
 			$tr.on("click", () => this.report_control.set_value(row.name));
+		});
+	}
+
+	// ---- import FR.TEC.09 Word reports ---------------------------------------
+	//
+	// Upload .docx files -> preview what each one would create (nothing is
+	// written) -> import in a background job, with progress over realtime.
+	// Parsing/writing is manutencao_preditiva.word_import; each file becomes
+	// its month's report plus a readings-only report for the previous month.
+
+	open_import_dialog() {
+		this.import_files = [];
+
+		const dialog = new frappe.ui.Dialog({
+			title: __("Import Word Reports"),
+			size: "extra-large",
+			fields: [
+				{
+					fieldtype: "HTML",
+					fieldname: "intro",
+					options: `<p class="text-muted" style="margin-bottom:0">${__(
+						"FR.TEC.09 vibration reports (.docx). Each file creates its area and equipment if missing, the month's report with every sheet and photo, and a readings-only report for the previous month so the trend starts right away. Both are Issued. Files already imported are skipped."
+					)}</p>`,
+				},
+				{
+					fieldtype: "Link",
+					fieldname: "customer",
+					label: __("Customer"),
+					options: "Customer",
+					description: __("Filled in from the reports when the name matches a Customer."),
+					onchange: () => this.import_files.length && this.preview_import(dialog),
+				},
+				{ fieldtype: "HTML", fieldname: "files" },
+			],
+			primary_action_label: __("Import"),
+			primary_action: () => this.start_import(dialog),
+		});
+
+		this.render_import_files(dialog);
+		dialog.get_primary_btn().prop("disabled", true);
+		dialog.onhide = () => frappe.realtime.off("mp_word_import");
+		dialog.show();
+	}
+
+	render_import_files(dialog, preview) {
+		// .rw so the Workbench styles (scoped CSS variables) apply inside the dialog too.
+		const $wrap = $('<div class="rw rw-dialog">').appendTo(dialog.fields_dict.files.$wrapper.empty());
+
+		$(`<button class="btn btn-default btn-sm">${__("Add .docx files")}</button>`)
+			.appendTo($wrap)
+			.on("click", () => {
+				new frappe.ui.FileUploader({
+					allow_multiple: true,
+					restrictions: { allowed_file_types: [".docx"] },
+					on_success: (file) => {
+						if (!this.import_files.includes(file.file_url)) this.import_files.push(file.file_url);
+						clearTimeout(this._preview_timer);
+						// on_success fires once per file - preview once they're all in.
+						this._preview_timer = setTimeout(() => this.preview_import(dialog), 400);
+					},
+				});
+			});
+
+		if (!preview) return;
+
+		const esc = frappe.utils.escape_html;
+		let html = `<div class="rw-table-wrap" style="margin-top:12px"><table class="rw-table"><thead><tr>
+			<th>${__("File")}</th><th>${__("Area")}</th><th>${__("Date")}</th><th>${__("Sheets")}</th>
+			<th>${__("New equipment")}</th><th>${__("Previous month")}</th><th>${__("Photos")}</th><th>${__("Severity")}</th>
+		</tr></thead><tbody>`;
+		let total_sheets = 0;
+		preview.forEach((f) => {
+			if (f.error) {
+				html += `<tr><td>${esc(f.file)}</td><td colspan="7" style="color:${RW_SEVERITY_HEX.Critical}">${esc(f.error)}</td></tr>`;
+				return;
+			}
+			total_sheets += f.sheets;
+			const severities = RW_SEVERITY_OPTIONS.filter((s) => f.severities[s])
+				.map((s) => rw_badge(`${f.severities[s]}`, RW_SEVERITY_HEX[s]))
+				.join(" ");
+			const unknown = f.severities["?"] ? ` <span class="text-muted">? ${f.severities["?"]}</span>` : "";
+			html += `<tr>
+				<td style="white-space:normal;max-width:260px">${esc(f.file)}${
+					f.existing_report ? `<div class="text-muted">${__("Already imported as {0}", [esc(f.existing_report)])}</div>` : ""
+				}</td>
+				<td>${esc(f.area)}${f.area_exists ? "" : ` <span class="rw-tag">${__("new")}</span>`}</td>
+				<td class="rw-mono">${f.report_date ? frappe.datetime.str_to_user(f.report_date) : "—"}</td>
+				<td class="rw-mono">${f.sheets}</td>
+				<td class="rw-mono">${f.new_equipment}</td>
+				<td class="rw-mono">${f.with_previous ? `${esc(f.previous_label)} · ${f.with_previous}` : "—"}</td>
+				<td class="rw-mono">${f.photos}</td>
+				<td>${severities}${unknown}</td>
+			</tr>`;
+			if (f.warnings.length) {
+				html += `<tr><td colspan="8" style="white-space:normal;padding-top:0">
+					<details><summary class="text-muted">${__("{0} note(s)", [f.warnings.length])}</summary>
+					<ul style="margin:4px 0 0 16px">${f.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>
+				</td></tr>`;
+			}
+		});
+		html += `</tbody></table></div>`;
+		html += `<p class="text-muted" style="margin-top:8px">${__("{0} file(s), {1} equipment sheets.", [
+			preview.length,
+			total_sheets,
+		])}</p>`;
+		$(html).appendTo($wrap);
+	}
+
+	preview_import(dialog) {
+		frappe.call({
+			method: "manutencao_preditiva.word_import.preview",
+			args: { file_urls: this.import_files, customer: dialog.get_value("customer") || null },
+			freeze: true,
+			freeze_message: __("Reading the reports…"),
+			callback: (r) => {
+				const preview = r.message || [];
+				this.import_preview = preview;
+				const guess = preview.find((f) => f.customer_match);
+				if (!dialog.get_value("customer") && guess) {
+					dialog.fields_dict.customer.set_input(guess.customer_match);
+				}
+				if (!dialog.get_value("customer") && preview.length) {
+					const names = [...new Set(preview.map((f) => f.customer).filter(Boolean))].join(", ");
+					frappe.show_alert({
+						message: __("No Customer called {0} - pick the customer to import into.", [names]),
+						indicator: "orange",
+					});
+				}
+				this.render_import_files(dialog, preview);
+				dialog.get_primary_btn().prop("disabled", !preview.some((f) => !f.error));
+			},
+		});
+	}
+
+	start_import(dialog) {
+		const customer = dialog.get_value("customer");
+		if (!customer) {
+			frappe.msgprint(__("Pick the customer to import into."));
+			return;
+		}
+		const files = (this.import_preview || []).filter((f) => !f.error).map((f) => f.file_url);
+		dialog.get_primary_btn().prop("disabled", true);
+
+		// .rw so the Workbench styles (scoped CSS variables) apply inside the dialog too.
+		const $wrap = $('<div class="rw rw-dialog">').appendTo(dialog.fields_dict.files.$wrapper.empty());
+		const $bar = $(`<div class="progress" style="height:6px;margin:12px 0 8px">
+			<div class="progress-bar" style="width:0%"></div></div>`).appendTo($wrap);
+		const $status = $(`<div class="text-muted">${__("Queued…")}</div>`).appendTo($wrap);
+		const $log = $('<ul style="margin:10px 0 0 16px">').appendTo($wrap);
+
+		frappe.realtime.off("mp_word_import");
+		frappe.realtime.on("mp_word_import", (data) => {
+			if (data.finished) {
+				$bar.find(".progress-bar").css("width", "100%");
+				const failed = data.results.filter((r) => r.error).length;
+				$status.text(
+					failed
+						? __("Finished - {0} file(s) failed, see below.", [failed])
+						: __("Finished - {0} file(s) imported.", [data.results.length])
+				);
+				$log.empty();
+				data.results.forEach((r) => {
+					const text = r.error
+						? `${r.file}: ${r.error}`
+						: `${r.file}: ${__("{0} sheets created, {1} skipped", [r.created, r.skipped])}${
+								r.report ? ` → ${r.report}` : ""
+						  }`;
+					$("<li>").text(text).css("color", r.error ? RW_SEVERITY_HEX.Critical : "").appendTo($log);
+				});
+				dialog.set_primary_action(__("Close"), () => dialog.hide());
+				dialog.get_primary_btn().prop("disabled", false);
+				this.load_recent_reports();
+				return;
+			}
+			$bar.find(".progress-bar").css("width", `${Math.round(((data.index - 1) / data.total) * 100)}%`);
+			$status.text(`${data.index}/${data.total} · ${data.file} · ${data.message}`);
+		});
+
+		frappe.call({
+			method: "manutencao_preditiva.word_import.start_import",
+			args: { file_urls: files, customer },
+			callback: () => $status.text(__("Importing - you can keep working, this runs in the background.")),
+			error: () => dialog.get_primary_btn().prop("disabled", false),
 		});
 	}
 

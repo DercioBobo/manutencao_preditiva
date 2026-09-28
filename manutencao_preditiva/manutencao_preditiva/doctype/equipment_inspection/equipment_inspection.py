@@ -100,13 +100,14 @@ class EquipmentInspection(Document):
 
 	def load_report_context(self):
 		report = frappe.db.get_value(
-			"Inspection Report", self.report, ["customer", "area", "report_date"], as_dict=True
+			"Inspection Report", self.report, ["customer", "area", "report_date", "readings_only"], as_dict=True
 		)
 		if not report:
 			frappe.throw(_("Report {0} does not exist.").format(self.report))
 		self.customer = report.customer
 		self.area = report.area
 		self.report_date = report.report_date
+		self.readings_only = report.readings_only
 
 	def load_equipment_context(self):
 		equipment = frappe.db.get_value(
@@ -181,14 +182,12 @@ class EquipmentInspection(Document):
 				)
 			)
 
+		# Without the rated power there is no velocity band to judge against,
+		# so velocity is simply left unjudged (evaluate() returns None) rather
+		# than refusing the sheet - imported Word reports carry no kW, and
+		# the analyst's own severity still stands.
 		found = []
 		for row in self.readings:
-			if flt(row.velocity_mm_s) and not flt(self.power_kw):
-				frappe.throw(
-					_(
-						"Row {0}: set the rated power (kW) of {1} - the velocity alarm limits depend on it."
-					).format(row.idx, self.equipment)
-				)
 			velocity, acceleration = evaluate(
 				limits,
 				flt(self.power_kw),
@@ -205,14 +204,28 @@ class EquipmentInspection(Document):
 	def set_severity(self):
 		"""Severity follows the suggestion until the analyst sets it. It only
 		follows while it still equals the previous suggestion; anything else
-		is a judgement call that a re-typed reading must not overwrite."""
+		is a judgement call that a re-typed reading must not overwrite.
+
+		A readings-only sheet is history for the trend, not a diagnosis - it
+		keeps whatever severity it was given (usually none) and has no
+		client action to follow up."""
+		if self.readings_only:
+			self.action_status = "Not Applicable"
+			return
+
 		before = self.get_doc_before_save()
 		old_suggestion = before.suggested_severity if before else ""
 
 		if self.suggested_severity and (not self.severity or self.severity == old_suggestion):
 			self.severity = self.suggested_severity
 
-		if self.severity and self.severity != NOT_COLLECTED and not self.suggested_severity:
+		# Readings that couldn't be judged (velocity with no kW set) still
+		# count as readings - only a sheet with nothing measured at all needs
+		# to say Not Collected.
+		measured = any(
+			flt(row.velocity_mm_s) or flt(row.acceleration_g) or flt(row.temperature_c) for row in self.readings
+		)
+		if self.severity and self.severity != NOT_COLLECTED and not measured:
 			frappe.throw(
 				_("Enter at least one reading, or set the severity to {0}.").format(_(NOT_COLLECTED))
 			)

@@ -58,7 +58,9 @@ def get_columns():
 
 
 def get_data(filters):
-	conditions = [
+	# Readings-only sheets are history for the trend, not findings to act on.
+	conditions = [["readings_only", "=", 0]]
+	conditions += [
 		[field, "=", filters[field]]
 		for field in ("customer", "report", "area", "severity", "action_status")
 		if filters.get(field)

@@ -214,8 +214,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// monitoring KPIs, Findings is for finding/editing a record, and they
 	// don't need to stay in lockstep. Dates filter by report_date (when the
 	// reading was taken), not creation (when the sheet was typed up).
+	// Every query here leaves out readings-only sheets (history kept just for
+	// the trend, e.g. the previous month of an imported Word report) - they
+	// are not findings and have no action to follow up. The trend in the
+	// finding dialog still shows them (manutencao_preditiva.trend).
 	get_dashboard_base_filters() {
-		const filters = {};
+		const filters = { readings_only: 0 };
 		if (this.dashboard_severity_filter) filters.severity = this.dashboard_severity_filter;
 		if (this.dashboard_active_status !== "all") filters.action_status = this.dashboard_active_status;
 		if (this.dashboard_area_filter) filters.area = this.dashboard_area_filter;
@@ -240,7 +244,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	// shows 0 - the two conditions are genuinely contradictory, which is
 	// the right answer once you've explicitly picked that filter).
 	get_dashboard_base_filters_list() {
-		const filters = [];
+		const filters = [["readings_only", "=", 0]];
 		if (this.dashboard_severity_filter) filters.push(["severity", "=", this.dashboard_severity_filter]);
 		if (this.dashboard_active_status !== "all") filters.push(["action_status", "=", this.dashboard_active_status]);
 		if (this.dashboard_area_filter) filters.push(["area", "=", this.dashboard_area_filter]);
@@ -252,7 +256,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	// Drives the card list + table fetch (Findings tab).
 	get_findings_filters() {
-		const filters = {};
+		const filters = { readings_only: 0 };
 		if (this.severity_filter) filters.severity = this.severity_filter;
 		if (this.active_status !== "all") filters.action_status = this.active_status;
 		return filters;
@@ -1133,19 +1137,23 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		const readings = (data.readings || []).filter((r) => r.velocity_mm_s || r.acceleration_g || r.temperature_c);
 		if (readings.length) {
+			// Previous value (from the equipment's previous sheet) next to each
+			// reading, so the change since last time reads at a glance.
+			const prev = (value) =>
+				value ? `<span style="color:#8a94a0;font-weight:400;margin-right:6px">${value} →</span>` : "";
 			html += '<div class="ma-crosstab-scroll" style="margin-top:10px"><table class="ma-crosstab"><thead><tr>';
 			html += `<th>${__("Point")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead><tbody>`;
 			readings.forEach((r) => {
-				const cell = (value, severity) => {
+				const cell = (value, severity, previous) => {
 					if (!value) return "<td></td>";
 					const color = MA_SEVERITY_HEX[severity];
 					const style = color ? ` style="background:${hex_to_rgba(color, 0.14)};color:${color};font-weight:700"` : "";
-					return `<td${style}>${value}</td>`;
+					return `<td${style}>${prev(previous)}${value}</td>`;
 				};
 				html += `<tr><td class="ma-crosstab-label">${frappe.utils.escape_html(r.point || "")}</td>`;
-				html += cell(r.velocity_mm_s, r.velocity_severity);
-				html += cell(r.acceleration_g, r.acceleration_severity);
-				html += `<td>${r.temperature_c || ""}</td></tr>`;
+				html += cell(r.velocity_mm_s, r.velocity_severity, r.previous_velocity_mm_s);
+				html += cell(r.acceleration_g, r.acceleration_severity, r.previous_acceleration_g);
+				html += `<td>${prev(r.previous_temperature_c)}${r.temperature_c || ""}</td></tr>`;
 			});
 			html += "</tbody></table></div>";
 		}
@@ -1208,6 +1216,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			size: "large",
 			fields: [
 				{ fieldtype: "HTML", fieldname: "summary", options: this.build_summary_html(data) },
+				{ fieldtype: "Section Break", label: __("Trend") },
+				{ fieldtype: "HTML", fieldname: "trend" },
 				{ fieldtype: "Section Break", label: __("Your Response") },
 				{ fieldtype: "Small Text", fieldname: "client_response", label: __("Action Taken / Response") },
 				{ fieldtype: "Column Break" },
@@ -1237,6 +1247,9 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		});
 
 		dialog.show();
+		// After show() - frappe.Chart sizes itself from its container, which
+		// has no width while the dialog is still hidden.
+		manutencao_preditiva.render_equipment_trend(dialog.fields_dict.trend.$wrapper, data.equipment);
 	}
 
 	save_response(dialog, name, values) {

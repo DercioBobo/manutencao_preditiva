@@ -9,4 +9,6 @@ __pycache__/
 *.xlsx
 *.xls
 *.pdf
+*.docx
+/preditiva/
 /achados.json

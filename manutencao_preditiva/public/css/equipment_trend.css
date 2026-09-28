@@ -1,0 +1,29 @@
+/* Trend charts - see public/js/equipment_trend.js. Plain values rather than
+ * page variables: this renders inside Dialogs and native forms, outside any
+ * page's own scoped custom properties. */
+
+.mp-trend {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	gap: 12px;
+}
+
+.mp-trend-chart {
+	border: 1px solid #dbe2e7;
+	border-radius: 8px;
+	padding: 10px 10px 0;
+	min-width: 0;
+}
+
+.mp-trend-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: #5b6b78;
+	margin-bottom: 2px;
+}
+
+.mp-trend-empty {
+	font-size: 12px;
+	color: #6b7680;
+	padding: 8px 0;
+}

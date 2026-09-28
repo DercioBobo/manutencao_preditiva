@@ -51,7 +51,14 @@ frappe.ui.form.on("Equipment", {
 				args: {
 					doctype: "Equipment Inspection",
 					filters: { equipment: frm.doc.name },
-					fields: ["name", "report", "report.period_label as period_label", "severity", "action_status"],
+					fields: [
+						"name",
+						"report",
+						"report.period_label as period_label",
+						"severity",
+						"action_status",
+						"readings_only",
+					],
 					// report_date exists on both Equipment Inspection and the
 					// joined Inspection Report (from the dotted fetch above) -
 					// qualify it, same fix as the order_by ambiguous-column bug
@@ -71,7 +78,9 @@ frappe.ui.form.on("Equipment", {
 					.map(
 						(row) => `
 						<tr class="eq-history-row" data-name="${frappe.utils.escape_html(row.name)}" style="cursor:pointer">
-							<td>${frappe.utils.escape_html(row.period_label || "")}</td>
+							<td>${frappe.utils.escape_html(row.period_label || "")}${
+								row.readings_only ? ` <span class="text-muted">(${__("readings only")})</span>` : ""
+							}</td>
 							<td><a href="#" class="eq-history-report" data-report="${frappe.utils.escape_html(
 								row.report
 							)}">${frappe.utils.escape_html(row.report)}</a></td>
@@ -87,6 +96,9 @@ frappe.ui.form.on("Equipment", {
 						<tbody>${body}</tbody>
 					</table>
 				`);
+
+				const $trend = $('<div style="margin-bottom:12px">').prependTo(wrapper);
+				manutencao_preditiva.render_equipment_trend($trend, frm.doc.name);
 
 				wrapper.find(".eq-history-report").on("click", function (e) {
 					e.preventDefault();

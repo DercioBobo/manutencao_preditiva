@@ -40,10 +40,11 @@ class InspectionReport(Document):
 	def validate_scope_not_changed(self):
 		"""Sheets copy the customer and area from here, so moving the report
 		once it has sheets would leave them pointing at the old ones."""
-		if self.is_new() or not (self.has_value_changed("customer") or self.has_value_changed("area")):
+		changed = any(self.has_value_changed(f) for f in ("customer", "area", "readings_only"))
+		if self.is_new() or not changed:
 			return
 		if frappe.db.exists("Equipment Inspection", {"report": self.name}):
-			frappe.throw(_("Customer and Area cannot change once the report has sheets."))
+			frappe.throw(_("Customer, Area and Readings Only cannot change once the report has sheets."))
 
 	def validate_can_be_issued(self):
 		if self.status != "Issued" or self.is_new():
@@ -53,6 +54,8 @@ class InspectionReport(Document):
 		)
 		if not sheets:
 			frappe.throw(_("Create the equipment sheets before issuing the report."))
+		if self.readings_only:
+			return
 		unassessed = [sheet.equipment for sheet in sheets if not sheet.severity]
 		if unassessed:
 			frappe.throw(

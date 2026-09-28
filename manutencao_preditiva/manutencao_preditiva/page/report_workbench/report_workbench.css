@@ -647,3 +647,29 @@
 		width: 100%;
 	}
 }
+
+/* ---- Import Word dialog ------------------------------------------------- */
+
+.rw.rw-dialog {
+	max-width: none;
+	margin: 12px 0 0;
+	padding: 0;
+}
+
+.rw-dialog .rw-table tbody tr {
+	cursor: default;
+}
+
+.rw-tag {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 0 6px;
+	border-radius: 4px;
+	font-family: var(--rw-font-sans);
+	font-size: 10.5px;
+	font-weight: 600;
+	color: var(--rw-muted);
+	background: var(--rw-surface-2);
+	border: 1px solid var(--rw-line);
+	vertical-align: 1px;
+}

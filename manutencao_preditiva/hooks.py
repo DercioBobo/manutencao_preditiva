@@ -18,7 +18,14 @@ required_apps = ["erpnext"]
 # Redirects a Cliente Portal login straight to Meus Achados instead of
 # landing on the Portal do Cliente workspace (which just holds a single
 # link to it) - see manutencao_preditiva/public/js/cliente_portal_redirect.js.
-app_include_js = ["/assets/manutencao_preditiva/js/cliente_portal_redirect.js"]
+#
+# equipment_trend.js is the trend chart shared by the Equipment form and
+# Meus Achados' finding dialog - one copy instead of one per page.
+app_include_js = [
+	"/assets/manutencao_preditiva/js/cliente_portal_redirect.js",
+	"/assets/manutencao_preditiva/js/equipment_trend.js",
+]
+app_include_css = ["/assets/manutencao_preditiva/css/equipment_trend.css"]
 
 # web_include_* apply to every website page (not just /login), but the
 # login theme's own CSS/JS are scoped to the .for-login wrapper so they

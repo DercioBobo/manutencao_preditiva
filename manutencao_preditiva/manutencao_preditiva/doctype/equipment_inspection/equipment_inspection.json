@@ -8,6 +8,7 @@
   "customer",
   "area",
   "report_date",
+  "readings_only",
   "cb_1",
   "equipment",
   "equipment_description",
@@ -67,6 +68,14 @@
    "label": "Report Date",
    "read_only": 1,
    "fetch_from": "report.report_date"
+  },
+  {
+   "fieldname": "readings_only",
+   "fieldtype": "Check",
+   "label": "Readings Only",
+   "read_only": 1,
+   "fetch_from": "report.readings_only",
+   "description": "Copied from the report - a history-only sheet, not a finding."
   },
   {
    "fieldname": "cb_1",
@@ -220,7 +229,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-21 00:00:00.000000",
+ "modified": "2026-09-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Equipment Inspection",

@@ -382,6 +382,37 @@ extract_to_json(
 )"
 ```
 
+### Importing Word reports (FR.TEC.09 vibration)
+
+Report Workbench → **Import Word**: upload the `.docx` files, check the
+preview (area, date, sheets, new equipment, previous-month readings, photos,
+severities, notes), pick the Customer if it wasn't matched by name, Import.
+It runs as a background job (needs the bench's workers) with progress in
+the dialog.
+
+Each file (one customer, one area, one month) creates:
+
+* the **Area** and every **Equipment** with its measurement points, if missing;
+* a **readings-only** Inspection Report for the previous month (last day of
+  that month), holding only the previous-month column of each sheet - so
+  the trend and the Prev. columns work from the first import, for staff and
+  client alike. It has no diagnosis; its sheets are left out of the client's
+  findings and the Action Tracker;
+* the month's **Inspection Report** (date, prepared by, address, technicians,
+  job number from the file name) with every sheet: readings, severity from
+  "OBSERVAÇÕES" (or the summary table's colour when that holds something
+  else), defects, recommendations, actions taken and the equipment photo.
+
+Both reports are Issued. Re-importing a file skips what already exists.
+The reports carry no motor power, so velocity isn't judged against the alarm
+bands until kW is set on the Equipment - the severity from the report stands.
+EMF photos (not viewable in a browser) are skipped and listed in the notes.
+
+The parser (`word_report.py`) is standard library only, so nothing extra is
+needed on the bench. Uploads are limited by `max_file_size` (10 MB by
+default); the larger reports need it raised, e.g.
+`bench --site <site> set-config max_file_size 60000000`.
+
 ## License
 
 mit
