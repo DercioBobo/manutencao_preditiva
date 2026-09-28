@@ -9,17 +9,29 @@ from frappe.sessions import clear_sessions
 from frappe.utils import cint, get_url, validate_email_address
 from frappe.utils.password import update_password
 
-ACCESS_MANAGER_ROLES = ("System Manager", "Gestor de Acessos de Cliente")
+ACCESS_MANAGER_ROLES = ("System Manager", "Administrador")
 
 PORTAL_WORKSPACE = "Portal do Cliente"
+STAFF_WORKSPACE = "Manutencao Preditiva"
+ADMIN_WORKSPACE = "Gestao de Acessos"
 OWN_MODULE = "Manutencao Preditiva"
 
-# Roles that mean "this is an internal staff login" - reusing one of these
-# emails for a client account would silently scope the staff member's own
-# Desk access to a single Customer (a User Permission applies to every
-# doctype that links to Customer, not just this app's), so it's blocked
-# rather than merged.
-INTERNAL_ROLES = ("System Manager", "Tecnico de Inspecao")
+# The only logins the Gestão de Acessos page can create or touch, and the
+# roles each profile gets. Gestor de Inspecao is layered on top of Tecnico
+# de Inspecao so it inherits every technician permission and only needs its
+# own permission rows for whatever it does beyond that.
+PROFILES = {
+	"Técnico de Inspeção": ["Tecnico de Inspecao"],
+	"Gestor de Inspeção": ["Tecnico de Inspecao", "Gestor de Inspecao"],
+	"Administrador": ["Administrador"],
+	"Cliente": ["Cliente Portal"],
+}
+CLIENT_PROFILE = "Cliente"
+MANAGED_ROLES = {role for roles in PROFILES.values() for role in roles}
+
+# Roles Frappe gives everyone implicitly - never a reason to treat an
+# account as "managed elsewhere".
+AUTOMATIC_ROLES = {"Administrator", "Guest", "All", "Desk User"}
 
 # No 0/O/1/l/I - a temp password that's read aloud or copied off a phone
 # screen shouldn't hinge on telling those apart.
@@ -58,153 +70,199 @@ def _restrict_client_desk(user):
 	user.set("block_modules", [{"module": m} for m in other_modules if m != OWN_MODULE])
 
 
+def _setup_staff_desk(user, profile):
+	"""Staff land on their own workspace. Unlike clients nothing is hidden -
+	they still need ERPNext screens such as Customer."""
+	workspace = ADMIN_WORKSPACE if profile == "Administrador" else STAFF_WORKSPACE
+	if frappe.db.exists("Workspace", workspace):
+		user.default_workspace = workspace
+	user.set("block_modules", [])
+
+
+def _explicit_roles(email):
+	roles = frappe.get_all("Has Role", filters={"parent": email, "parenttype": "User"}, pluck="role")
+	return set(roles) - AUTOMATIC_ROLES
+
+
+def _profile_for(roles):
+	for profile in ("Administrador", "Gestor de Inspeção", "Técnico de Inspeção", "Cliente"):
+		if set(PROFILES[profile]) <= roles:
+			return profile
+	return None
+
+
+def _is_manageable(email, roles=None):
+	"""Only accounts made purely of this page's roles. Anything carrying
+	another role (System Manager above all) is off limits - otherwise an
+	Administrador could reset a System Manager's password and log in as them."""
+	if email in ("Administrator", "Guest"):
+		return False
+	roles = _explicit_roles(email) if roles is None else roles
+	return bool(roles) and roles <= MANAGED_ROLES
+
+
+def _require_manageable(email):
+	if not frappe.db.exists("User", email) or not _is_manageable(email):
+		frappe.throw(_("{0} não pode ser gerido a partir desta página.").format(email))
+
+
+def _require_not_self(email):
+	if email == frappe.session.user:
+		frappe.throw(_("Não podes alterar a tua própria conta aqui."))
+
+
+def _validate_profile(profile, customer):
+	if profile not in PROFILES:
+		frappe.throw(_("Perfil inválido: {0}").format(profile))
+	if profile == CLIENT_PROFILE:
+		if not customer:
+			frappe.throw(_("Escolhe o cliente para um acesso de cliente."))
+		if not frappe.db.exists("Customer", customer):
+			frappe.throw(_("O cliente {0} não existe.").format(customer))
+
+
+def _apply_profile(user, profile):
+	"""Replace the user's roles with exactly the profile's and set up the
+	desk to match. Mutates the in-memory doc - caller saves."""
+	user.set("roles", [{"role": r} for r in PROFILES[profile]])
+	if profile == CLIENT_PROFILE:
+		_restrict_client_desk(user)
+	else:
+		_setup_staff_desk(user, profile)
+
+
+def _set_customer_scope(email, customer):
+	"""One Customer User Permission for a client, none for staff - a leftover
+	one would silently limit a staff member to a single customer on every
+	doctype that links to Customer, not just this app's."""
+	frappe.db.delete("User Permission", {"user": email, "allow": "Customer"})
+	if not customer:
+		return
+	perm = frappe.get_doc(
+		{
+			"doctype": "User Permission",
+			"user": email,
+			"allow": "Customer",
+			"for_value": customer,
+			"apply_to_all_doctypes": 1,
+		}
+	)
+	perm.flags.ignore_permissions = True
+	perm.insert()
+
+
 @frappe.whitelist()
-def criar_acesso_cliente(full_name, email, customer, send_welcome=1):
-	"""Provision (or extend) Cliente Portal access for one Customer in a
-	single call: creates the User if needed (role = Cliente Portal only),
-	adds the User Permission that scopes them to that Customer, points their
-	desk straight at Portal do Cliente and hides every other app's module
-	from their sidebar, sets a ready-to-use temporary password on a brand
-	new account, and returns a set-password link too - so a non-technical
-	admin doesn't have to visit the User and User Permission screens
-	separately, can't leave the portal unscoped by forgetting the permission
-	step, and can hand the client working credentials immediately instead of
-	depending on outgoing email.
+def criar_utilizador(full_name, email, profile, customer=None, send_welcome=1):
+	"""Create a login with one of the page's profiles in a single call:
+	roles, desk setup, the Customer scope for a client, a ready-to-use
+	temporary password and a set-password link - so the admin never needs
+	the User or User Permission screens, and can hand over working
+	credentials without depending on outgoing email.
 
-	The temp password is only generated for a brand new account - reusing
-	this call to add an existing Cliente Portal user to another Customer
-	must not silently invalidate a password they're already using.
-
-	Restricted to System Manager / Gestor de Acessos de Cliente; the writes
-	below run with ignore_permissions=True so that role needs no direct
-	permission on User or User Permission itself.
+	Restricted to System Manager / Administrador; the writes run with
+	ignore_permissions=True so that role needs no direct permission on User
+	or User Permission itself.
 	"""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 
 	full_name = (full_name or "").strip()
-	email = (email or "").strip()
-	customer = (customer or "").strip()
+	email = (email or "").strip().lower()
+	customer = (customer or "").strip() if profile == CLIENT_PROFILE else None
 	send_welcome = cint(send_welcome)
 
-	if not full_name or not email or not customer:
-		frappe.throw(_("Nome, Email e Cliente são obrigatórios."))
-
+	if not full_name or not email or not profile:
+		frappe.throw(_("Nome, Email e Perfil são obrigatórios."))
 	validate_email_address(email, throw=True)
+	_validate_profile(profile, customer)
 
-	if not frappe.db.exists("Customer", customer):
-		frappe.throw(_("O cliente {0} não existe.").format(customer))
+	if frappe.db.exists("User", email):
+		frappe.throw(_("Já existe uma conta com o email {0}. Gere-a na lista abaixo.").format(email))
 
-	created_user = not frappe.db.exists("User", email)
-	temp_password = None
-
-	if created_user:
-		first_name, _sep, last_name = full_name.partition(" ")
-		user = frappe.get_doc(
-			{
-				"doctype": "User",
-				"email": email,
-				"first_name": first_name,
-				"last_name": last_name or None,
-				"user_type": "System User",
-				"send_welcome_email": 0,
-				"roles": [{"role": "Cliente Portal"}],
-			}
-		)
-		user.flags.ignore_permissions = True
-		_restrict_client_desk(user)
-		user.insert()
-
-		temp_password = _generate_temp_password()
-		update_password(email, temp_password)
-	else:
-		user = frappe.get_doc("User", email)
-		existing_roles = {r.role for r in user.roles}
-		if existing_roles & set(INTERNAL_ROLES):
-			frappe.throw(
-				_(
-					"{0} já é uma conta interna ({1}). Use um email diferente para o acesso do cliente."
-				).format(email, ", ".join(existing_roles & set(INTERNAL_ROLES)))
-			)
-		if "Cliente Portal" not in existing_roles:
-			user.append("roles", {"role": "Cliente Portal"})
-		if not user.enabled:
-			user.enabled = 1
-
-		# Always reapplied (not just on first creation) so re-running this
-		# tool for an already-provisioned client also declutters their desk -
-		# e.g. after this restriction was added, for accounts made before it.
-		_restrict_client_desk(user)
-
-		user.flags.ignore_permissions = True
-		user.save()
-
-	already_scoped = frappe.db.exists(
-		"User Permission",
-		{"user": email, "allow": "Customer", "for_value": customer},
+	first_name, _sep, last_name = full_name.partition(" ")
+	user = frappe.get_doc(
+		{
+			"doctype": "User",
+			"email": email,
+			"first_name": first_name,
+			"last_name": last_name or None,
+			"user_type": "System User",
+			"send_welcome_email": 0,
+		}
 	)
-	if not already_scoped:
-		perm = frappe.get_doc(
-			{
-				"doctype": "User Permission",
-				"user": email,
-				"allow": "Customer",
-				"for_value": customer,
-				"apply_to_all_doctypes": 1,
-			}
-		)
-		perm.flags.ignore_permissions = True
-		perm.insert()
+	_apply_profile(user, profile)
+	user.flags.ignore_permissions = True
+	user.insert()
 
+	_set_customer_scope(email, customer)
+
+	temp_password = _generate_temp_password()
+	update_password(email, temp_password)
 	relative_link = user._reset_password(send_email=bool(send_welcome))
 
 	return {
-		"created_user": created_user,
 		"email": email,
+		"profile": profile,
 		"password": temp_password,
 		"link": get_url(relative_link),
 		"email_sent": bool(send_welcome),
 	}
 
 
-def _require_cliente_portal_user(email):
-	"""Guard for the management endpoints below - they must only ever act on
-	accounts that are genuinely Cliente Portal logins, never an arbitrary
-	User, since this tool's role has no other permission on User at all."""
-	if not frappe.db.exists("Has Role", {"parent": email, "role": "Cliente Portal"}):
-		frappe.throw(_("{0} não é uma conta de Cliente Portal.").format(email))
-
-
 @frappe.whitelist()
-def listar_acessos_cliente():
-	"""Every Cliente Portal account, with the Customer(s) it's scoped to -
-	the read side of the Gestão de Acessos tool."""
+def listar_utilizadores():
+	"""Every account holding one of the page's roles. Accounts that also
+	carry other roles come back flagged read-only, so the admin can see they
+	exist without being able to touch them."""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 
-	return frappe.db.sql(
+	rows = frappe.db.sql(
 		"""
 		select
 			u.name as email,
 			u.full_name,
 			u.enabled,
+			u.last_login,
 			group_concat(distinct up.for_value separator ', ') as customers
 		from `tabUser` u
-		inner join `tabHas Role` hr on hr.parent = u.name and hr.role = 'Cliente Portal'
 		left join `tabUser Permission` up on up.user = u.name and up.allow = 'Customer'
+		where u.name not in ('Administrator', 'Guest')
+			and exists (
+				select 1 from `tabHas Role` hr
+				where hr.parent = u.name and hr.parenttype = 'User' and hr.role in %(roles)s
+			)
 		group by u.name
 		order by u.full_name
 		""",
+		{"roles": tuple(MANAGED_ROLES)},
 		as_dict=True,
 	)
+	if not rows:
+		return []
+
+	roles_by_user = {}
+	for r in frappe.get_all(
+		"Has Role",
+		filters={"parent": ("in", [row.email for row in rows]), "parenttype": "User"},
+		fields=["parent", "role"],
+	):
+		roles_by_user.setdefault(r.parent, set()).add(r.role)
+
+	for row in rows:
+		roles = roles_by_user.get(row.email, set()) - AUTOMATIC_ROLES
+		row.profile = _profile_for(roles)
+		row.manageable = _is_manageable(row.email, roles)
+		row.is_self = row.email == frappe.session.user
+
+	return rows
 
 
 @frappe.whitelist()
-def repor_password_cliente(email):
-	"""Fresh temp password + reset link for an existing Cliente Portal user -
-	same result shape as creation, so the UI can reuse the same copy-and-hand
-	-over flow."""
+def repor_password(email):
+	"""Fresh temp password + reset link - same result shape as creation, so
+	the UI reuses the same copy-and-hand-over flow."""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 	email = (email or "").strip()
-	_require_cliente_portal_user(email)
+	_require_manageable(email)
 
 	temp_password = _generate_temp_password()
 	update_password(email, temp_password)
@@ -216,13 +274,14 @@ def repor_password_cliente(email):
 
 
 @frappe.whitelist()
-def alternar_activo_cliente(email, enabled):
-	"""Enable/disable a Cliente Portal login. Disabling also kills any
-	sessions already open for them - flipping the flag alone would leave an
-	already-logged-in tab working until it naturally expires."""
+def alternar_activo(email, enabled):
+	"""Enable/disable a login. Disabling also kills any sessions already
+	open - flipping the flag alone would leave a logged-in tab working until
+	it naturally expires."""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 	email = (email or "").strip()
-	_require_cliente_portal_user(email)
+	_require_manageable(email)
+	_require_not_self(email)
 	enabled = cint(enabled)
 
 	user = frappe.get_doc("User", email)
@@ -237,33 +296,25 @@ def alternar_activo_cliente(email, enabled):
 
 
 @frappe.whitelist()
-def mudar_cliente(email, customer):
-	"""Repoint a Cliente Portal user at a different Customer - replaces every
-	existing Customer User Permission for them rather than adding to it, to
-	keep the app's one-customer-per-login assumption intact even if older or
-	manually-created data ever had more than one."""
+def mudar_perfil(email, profile, customer=None):
+	"""Switch a login to another profile, or a client to another Customer.
+	Roles are replaced rather than added to and the Customer scope is
+	rebuilt, so a client moved to staff doesn't stay limited to one
+	customer, and staff moved to client doesn't keep internal access. Open
+	sessions are ended so the change applies immediately."""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 	email = (email or "").strip()
-	customer = (customer or "").strip()
-	_require_cliente_portal_user(email)
+	customer = (customer or "").strip() if profile == CLIENT_PROFILE else None
+	_require_manageable(email)
+	_require_not_self(email)
+	_validate_profile(profile, customer)
 
-	if not customer:
-		frappe.throw(_("Escolhe um cliente."))
-	if not frappe.db.exists("Customer", customer):
-		frappe.throw(_("O cliente {0} não existe.").format(customer))
+	user = frappe.get_doc("User", email)
+	_apply_profile(user, profile)
+	user.flags.ignore_permissions = True
+	user.save()
 
-	frappe.db.delete("User Permission", {"user": email, "allow": "Customer"})
+	_set_customer_scope(email, customer)
+	clear_sessions(email)
 
-	perm = frappe.get_doc(
-		{
-			"doctype": "User Permission",
-			"user": email,
-			"allow": "Customer",
-			"for_value": customer,
-			"apply_to_all_doctypes": 1,
-		}
-	)
-	perm.flags.ignore_permissions = True
-	perm.insert()
-
-	return {"email": email, "customer": customer}
+	return {"email": email, "profile": profile, "customer": customer}

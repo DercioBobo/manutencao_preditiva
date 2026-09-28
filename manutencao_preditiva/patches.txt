@@ -1,4 +1,5 @@
 [pre_model_sync]
+manutencao_preditiva.patches.renomear_gestor_de_acessos
 
 [post_model_sync]
 manutencao_preditiva.patches.normalizar_area_planta

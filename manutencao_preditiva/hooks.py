@@ -30,23 +30,31 @@ web_include_js = ["/assets/manutencao_preditiva/js/login_theme.js"]
 
 # Fixtures
 # --------
-# Exported so `bench get-app` + `bench migrate` reproduces the three roles
+# Exported so `bench get-app` + `bench migrate` reproduces the app's roles
 # out of the box. "Cliente Portal" is restricted per-client via a User
 # Permission on Customer (Setup -> User Permissions) - it then only ever
 # sees/edits the Achado De Inspecao rows for its own Customer.
 #
-# "Gestor de Acessos de Cliente" has no doctype permissions of its own - it
-# only grants access to the "Criar Acesso de Cliente" page, whose whitelisted
-# method (manutencao_preditiva.api.criar_acesso_cliente) does the actual User
-# / User Permission writes with ignore_permissions=True. That way a
-# non-technical admin can onboard client logins without ever needing direct
-# access to Setup > User List / User Permissions.
+# "Gestor de Inspecao" is always given together with "Tecnico de Inspecao"
+# (see api.PROFILES), so it only needs permissions for what it adds.
+#
+# "Administrador" has no doctype permissions of its own - it only grants
+# access to the Gestão de Utilizadores page (criar-acesso-de-cliente), whose
+# whitelisted methods in manutencao_preditiva.api do the actual User / User
+# Permission writes with ignore_permissions=True. That way a non-technical
+# admin can create and manage logins without ever needing direct access to
+# Setup > User List / User Permissions, and can only hand out this app's
+# roles - never System Manager.
 
 fixtures = [
 	{
 		"dt": "Role",
 		"filters": [
-			["name", "in", ["Tecnico de Inspecao", "Cliente Portal", "Gestor de Acessos de Cliente"]]
+			[
+				"name",
+				"in",
+				["Tecnico de Inspecao", "Gestor de Inspecao", "Cliente Portal", "Administrador"],
+			]
 		],
 	},
 ]
