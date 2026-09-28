@@ -2,7 +2,7 @@
 // For license information, please see license.txt
 
 // Cliente Portal users have every other module blocked (see
-// manutencao_preditiva.api._restrict_client_desk) and default_workspace
+// manutencao_preditiva.api._setup_desk) and default_workspace
 // pointed at Portal do Cliente, so the only thing worth landing on is
 // Meus Achados directly - skip the one extra click through the workspace.
 frappe.ready(function () {

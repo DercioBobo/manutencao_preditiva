@@ -11,7 +11,7 @@ frappe.pages["criar-acesso-de-cliente"].on_page_load = function (wrapper) {
 const CAC_PROFILES = [
 	{ value: "Técnico de Inspeção", hint: "Faz inspeções e relatórios." },
 	{ value: "Gestor de Inspeção", hint: "Tudo o que o técnico faz, mais as permissões de gestão." },
-	{ value: "Administrador", hint: "Cria e gere os utilizadores nesta página." },
+	{ value: "Administrador", hint: "Tudo o que o gestor faz, e cria e gere os utilizadores." },
 	{ value: "Cliente", hint: "Vê apenas os relatórios emitidos do seu cliente, no Portal do Cliente." },
 ];
 const CAC_CLIENT = "Cliente";
@@ -39,14 +39,22 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 			"Cria logins para a equipa e para os clientes, repõe passwords e ativa ou desativa acessos. Cada pessoa recebe apenas o perfil escolhido."
 		)}</p>`).appendTo(this.$container);
 
-		this.$card = $('<div class="cac-card">').appendTo(this.$container);
+		const $layout = $('<div class="cac-layout">').appendTo(this.$container);
+		const $aside = $('<div class="cac-aside">').appendTo($layout);
+		const $main = $('<div class="cac-main">').appendTo($layout);
+
+		this.$card = $('<div class="cac-card">').appendTo($aside);
+		$(`<div class="cac-card-title">${__("Novo utilizador")}</div>`).appendTo(this.$card);
 		this.render_form();
 
-		this.$result = $('<div class="cac-result">').appendTo(this.$container).hide();
+		this.$result = $('<div class="cac-result">').appendTo($aside).hide();
 
-		$('<h3 class="cac-section-title">').text(__("Utilizadores")).appendTo(this.$container);
-		this.render_toolbar();
-		this.$accounts_wrap = $('<div class="cac-accounts-wrap">').appendTo(this.$container);
+		const $panel = $('<div class="cac-panel">').appendTo($main);
+		const $head = $('<div class="cac-panel-head">').appendTo($panel);
+		$(`<div class="cac-card-title">${__("Utilizadores")}</div>`).appendTo($head);
+		this.$count = $('<span class="cac-count">').appendTo($head);
+		this.render_toolbar($panel);
+		this.$accounts_wrap = $('<div class="cac-accounts-wrap">').appendTo($panel);
 		this.load_accounts();
 	}
 
@@ -58,7 +66,6 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 				fieldtype: "Data",
 				fieldname: "full_name",
 				label: __("Nome Completo"),
-				reqd: 1,
 			},
 			parent: $field()[0],
 			render_input: true,
@@ -71,8 +78,6 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 				fieldname: "email",
 				label: __("Email"),
 				options: "Email",
-				reqd: 1,
-				description: __("Vai ser o email de login."),
 			},
 			parent: $field()[0],
 			render_input: true,
@@ -85,7 +90,6 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 				fieldname: "profile",
 				label: __("Perfil"),
 				options: ["", ...CAC_PROFILES.map((p) => p.value)].join("\n"),
-				reqd: 1,
 				change: () => this.on_profile_change(),
 			},
 			parent: $field()[0],
@@ -100,7 +104,6 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 				fieldname: "customer",
 				label: __("Cliente"),
 				options: "Customer",
-				reqd: 1,
 				description: __("O cliente cujos relatórios esta pessoa poderá ver."),
 			},
 			parent: this.$customer_field[0],
@@ -222,8 +225,8 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 
 	// ---- existing accounts: list + manage --------------------------------
 
-	render_toolbar() {
-		const $bar = $('<div class="cac-toolbar">').appendTo(this.$container);
+	render_toolbar($parent) {
+		const $bar = $('<div class="cac-toolbar">').appendTo($parent);
 
 		$(`<input type="search" class="cac-search" placeholder="${__("Procurar por nome ou email")}">`)
 			.appendTo($bar)
@@ -236,7 +239,8 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		[{ value: "", label: __("Todos") }, ...CAC_PROFILES.map((p) => ({ value: p.value, label: __(p.value) }))].forEach(
 			(p) => {
 				$(`<button class="cac-chip" data-profile="${frappe.utils.escape_html(p.value)}">`)
-					.text(p.label)
+					.append($('<span class="cac-chip-label">').text(p.label))
+					.append('<span class="cac-chip-count"></span>')
 					.toggleClass("active", p.value === this.filter_profile)
 					.appendTo(this.$chips)
 					.on("click", () => {
@@ -250,11 +254,21 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		);
 	}
 
+	update_counts() {
+		this.$count.text(this.rows.length);
+		this.$chips.find(".cac-chip").each((_i, el) => {
+			const profile = $(el).attr("data-profile");
+			const n = profile ? this.rows.filter((r) => r.profile === profile).length : this.rows.length;
+			$(el).find(".cac-chip-count").text(n);
+		});
+	}
+
 	load_accounts() {
 		frappe.call({
 			method: "manutencao_preditiva.api.listar_utilizadores",
 			callback: (r) => {
 				this.rows = r.message || [];
+				this.update_counts();
 				this.render_accounts();
 			},
 		});
@@ -281,12 +295,11 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		const $table = $('<table class="cac-table">').appendTo($table_wrap);
 		$(
 			`<thead><tr>
-				<th>${__("Nome")}</th>
-				<th>${__("Email")}</th>
+				<th>${__("Utilizador")}</th>
 				<th>${__("Perfil")}</th>
 				<th>${__("Cliente")}</th>
 				<th>${__("Estado")}</th>
-				<th>${__("Ações")}</th>
+				<th class="cac-th-actions"></th>
 			</tr></thead>`
 		).appendTo($table);
 		const $tbody = $("<tbody>").appendTo($table);
@@ -295,18 +308,40 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 	}
 
 	render_account_row($tbody, row) {
-		const $tr = $("<tr>").appendTo($tbody);
-		const $name = $("<td>").text(row.full_name || "").appendTo($tr);
-		if (row.is_self) $(`<span class="cac-you">${__("tu")}</span>`).appendTo($name);
-		$("<td>").text(row.email).appendTo($tr);
-		$("<td>").text(row.profile ? __(row.profile) : "—").appendTo($tr);
-		$("<td>").text(row.customers || "—").appendTo($tr);
+		const $tr = $("<tr>").toggleClass("cac-row-disabled", !row.enabled).appendTo($tbody);
 
-		const badge_class = row.enabled ? "cac-badge-active" : "cac-badge-inactive";
-		const badge_label = row.enabled ? __("Ativo") : __("Inativo");
-		$(`<td><span class="cac-badge ${badge_class}">${badge_label}</span></td>`).appendTo($tr);
+		const name = row.full_name || row.email;
+		const initials = name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((w) => w[0].toUpperCase())
+			.join("");
+		const $who = $('<div class="cac-who">').appendTo($("<td>").appendTo($tr));
+		$('<span class="cac-avatar">').text(initials).appendTo($who);
+		const $who_text = $('<div class="cac-who-text">').appendTo($who);
+		const $who_name = $('<div class="cac-who-name">').text(name).appendTo($who_text);
+		if (row.is_self) $(`<span class="cac-you">${__("tu")}</span>`).appendTo($who_name);
+		$('<div class="cac-who-email">').text(row.email).appendTo($who_text);
 
-		const $actions = $('<td class="cac-row-actions">').appendTo($tr);
+		const profile_idx = CAC_PROFILES.findIndex((p) => p.value === row.profile);
+		$("<td>")
+			.append(
+				row.profile
+					? $(`<span class="cac-pill cac-pill-${profile_idx}">`).text(__(row.profile))
+					: $('<span class="cac-dash">—</span>')
+			)
+			.appendTo($tr);
+
+		$("<td>")
+			.append(row.customers ? $("<span>").text(row.customers) : $('<span class="cac-dash">—</span>'))
+			.appendTo($tr);
+
+		$(`<td><span class="cac-status ${row.enabled ? "on" : "off"}">${
+			row.enabled ? __("Ativo") : __("Inativo")
+		}</span></td>`).appendTo($tr);
+
+		const $actions = $('<div class="cac-row-actions">').appendTo($('<td class="cac-td-actions">').appendTo($tr));
 
 		if (!row.manageable) {
 			$(`<span class="cac-muted" title="${__(
@@ -315,19 +350,21 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 			return;
 		}
 
-		$(`<button class="cac-btn cac-btn-sm">${__("Repor Password")}</button>`)
+		$(`<button class="cac-btn cac-btn-sm">${__("Repor password")}</button>`)
 			.appendTo($actions)
 			.on("click", () => this.reset_password(row));
 
 		if (row.is_self) return;
 
-		$(`<button class="cac-btn cac-btn-sm">${row.enabled ? __("Desativar") : __("Ativar")}</button>`)
-			.appendTo($actions)
-			.on("click", () => this.toggle_enabled(row));
-
-		$(`<button class="cac-btn cac-btn-sm">${__("Mudar Perfil")}</button>`)
+		$(`<button class="cac-btn cac-btn-sm">${__("Mudar perfil")}</button>`)
 			.appendTo($actions)
 			.on("click", () => this.change_profile(row));
+
+		$(`<button class="cac-btn cac-btn-sm ${row.enabled ? "cac-btn-danger" : ""}">${
+			row.enabled ? __("Desativar") : __("Ativar")
+		}</button>`)
+			.appendTo($actions)
+			.on("click", () => this.toggle_enabled(row));
 	}
 
 	reset_password(row) {

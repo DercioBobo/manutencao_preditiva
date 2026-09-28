@@ -13,17 +13,18 @@ ACCESS_MANAGER_ROLES = ("System Manager", "Administrador")
 
 PORTAL_WORKSPACE = "Portal do Cliente"
 STAFF_WORKSPACE = "Manutencao Preditiva"
-ADMIN_WORKSPACE = "Gestao de Acessos"
 OWN_MODULE = "Manutencao Preditiva"
+# Created on the site by hand, not shipped with the app.
+MODULE_PROFILE = "MP"
 
 # The only logins the Gestão de Acessos page can create or touch, and the
-# roles each profile gets. Gestor de Inspecao is layered on top of Tecnico
-# de Inspecao so it inherits every technician permission and only needs its
-# own permission rows for whatever it does beyond that.
+# roles each profile gets. Each staff profile is layered on the one below,
+# so Gestor inherits every technician permission and Administrador has
+# everything - each role only needs permission rows for what it adds.
 PROFILES = {
 	"Técnico de Inspeção": ["Tecnico de Inspecao"],
 	"Gestor de Inspeção": ["Tecnico de Inspecao", "Gestor de Inspecao"],
-	"Administrador": ["Administrador"],
+	"Administrador": ["Tecnico de Inspecao", "Gestor de Inspecao", "Administrador"],
 	"Cliente": ["Cliente Portal"],
 }
 CLIENT_PROFILE = "Cliente"
@@ -55,28 +56,30 @@ def _generate_temp_password(length=12):
 	return "".join(required)
 
 
-def _restrict_client_desk(user):
-	"""Land the user on Portal do Cliente instead of the generic Desk home,
-	and hide every other installed app's module (HR, Website, Tools, ...)
-	from the sidebar - a client only ever needs to see their own portal, not
-	the internal team's workspaces. Computed fresh from Module Def each call
-	so it stays correct as apps are added/removed, and mutates the in-memory
-	doc only - caller is responsible for saving.
+def _setup_desk(user, profile):
+	"""Land the user on their profile's workspace and apply the MP Module
+	Profile, which decides which modules show in the sidebar - the User
+	controller copies its blocked modules onto the user on save. Mutates the
+	in-memory doc only - caller is responsible for saving.
+
+	Without MP on the site, clients fall back to hiding every module but
+	this app's (computed fresh from Module Def so it stays correct as apps
+	are added/removed) and staff see everything.
 	"""
-	if frappe.db.exists("Workspace", PORTAL_WORKSPACE):
-		user.default_workspace = PORTAL_WORKSPACE
-
-	other_modules = frappe.get_all("Module Def", pluck="module_name")
-	user.set("block_modules", [{"module": m} for m in other_modules if m != OWN_MODULE])
-
-
-def _setup_staff_desk(user, profile):
-	"""Staff land on their own workspace. Unlike clients nothing is hidden -
-	they still need ERPNext screens such as Customer."""
-	workspace = ADMIN_WORKSPACE if profile == "Administrador" else STAFF_WORKSPACE
+	workspace = PORTAL_WORKSPACE if profile == CLIENT_PROFILE else STAFF_WORKSPACE
 	if frappe.db.exists("Workspace", workspace):
 		user.default_workspace = workspace
-	user.set("block_modules", [])
+
+	if frappe.db.exists("Module Profile", MODULE_PROFILE):
+		user.module_profile = MODULE_PROFILE
+		return
+
+	user.module_profile = None
+	if profile == CLIENT_PROFILE:
+		other_modules = frappe.get_all("Module Def", pluck="module_name")
+		user.set("block_modules", [{"module": m} for m in other_modules if m != OWN_MODULE])
+	else:
+		user.set("block_modules", [])
 
 
 def _explicit_roles(email):
@@ -125,10 +128,7 @@ def _apply_profile(user, profile):
 	"""Replace the user's roles with exactly the profile's and set up the
 	desk to match. Mutates the in-memory doc - caller saves."""
 	user.set("roles", [{"role": r} for r in PROFILES[profile]])
-	if profile == CLIENT_PROFILE:
-		_restrict_client_desk(user)
-	else:
-		_setup_staff_desk(user, profile)
+	_setup_desk(user, profile)
 
 
 def _set_customer_scope(email, customer):
