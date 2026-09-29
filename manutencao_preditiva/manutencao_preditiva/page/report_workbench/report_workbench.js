@@ -13,17 +13,16 @@
 // equipment-picker + readings/diagnosis/gallery editor were the starting
 // point for this page's own (see render_sheets_card()/open_sheet_dialog()).
 //
-// Structure (2026-09-23 revision, after "this reads as unrelated boxes"
-// feedback on the first version): the loaded report and its equipment
-// sheets are ONE continuous panel (render_sheets_card() appends into
-// render_report_card()'s own container, not a sibling card), so it reads
-// as "this report, and everything in it" rather than two same-weight
-// boxes with no visual relationship. The picker/Recent Reports above it
-// is deliberately a separate, lighter module - finding/switching reports
-// is a different task from working on the one that's loaded - and
-// auto-collapses once a report loads (see load_report()) so it doesn't
-// keep competing for attention, which also keeps it usable once there are
-// many customers' reports in it, not just the one being worked on.
+// Structure (2026-09-29): master-detail. A navigator on the left lists
+// every report grouped by customer and area (newest period first, drafts
+// counted per area, readings-only months muted), with search, a customer
+// filter and Draft/Issued chips; the selected report fills the right - its
+// header, summary and sheets as ONE panel (render_sheets_card() appends
+// into render_report_card()'s container), so it reads as "this report and
+// everything in it". The selection is the URL (/app/report-workbench/<name>,
+// see select_report()/sync_route()), so back/forward, reload and shared
+// links work. Replaced the earlier picker + collapsible Recent Reports
+// table, which got messy once imports brought in dozens of reports.
 //
 // Clicking a sheet opens it in a Dialog right here, not a page navigation -
 // so there's still only ONE editing surface for a sheet's technical
@@ -46,8 +45,11 @@ frappe.pages["report-workbench"].on_page_load = function (wrapper) {
 
 frappe.pages["report-workbench"].on_page_show = function (wrapper) {
 	if (!wrapper.rw) return;
-	wrapper.rw.load_recent_reports();
-	if (wrapper.rw.report) wrapper.rw.load_report(wrapper.rw.report);
+	wrapper.rw.load_nav_reports();
+	// Coming back to the page: refresh the open report (it may have been
+	// edited in the full form meanwhile), or open the one in the URL.
+	if (wrapper.rw.report && frappe.get_route()[1] === wrapper.rw.report) wrapper.rw.load_report(wrapper.rw.report);
+	else wrapper.rw.sync_route();
 };
 
 const RW_SEVERITY_OPTIONS = ["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"];
@@ -88,134 +90,105 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.sheets_view_mode = "table";
 		this.sheets_search = "";
 		this.sheets_severity_filter = "all";
-		this.recent_rows = [];
-		this.recent_status_filter = "all";
-		this.recent_search = "";
-		this.recent_customer_filter = "";
-		// Collapsed automatically once a report is loaded (see load_report())
-		// so the loaded report - not a growing table of every other one - is
-		// clearly the thing in focus. Starts expanded: that's the only way to
-		// find a report before one is loaded.
-		this.recent_expanded = true;
+		this.nav_rows = [];
+		this.nav_status = "all";
+		this.nav_search = "";
+		this.nav_customer = "";
+		this.nav_open = new Set(); // area groups the user unfolded
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
 			title: __("Report Workbench"),
 			single_column: true,
 		});
+		this.page.main.addClass("rw-page-main");
 
 		this.render_shell();
-		this.load_recent_reports();
+		this.load_nav_reports();
+		// Back/forward between /app/report-workbench/<report> URLs stays on
+		// this page, so follow the route here as well as in on_page_show.
+		frappe.router.on("change", () => this.sync_route());
 	}
 
+	// Master-detail: a navigator on the left (every report, grouped by area,
+	// newest period first) and the selected report on the right. The
+	// selection lives in the URL - /app/report-workbench/<report> - so back
+	// and forward, reloads and shared links all land on the right report.
 	render_shell() {
-		this.$container = $('<div class="rw">').appendTo(this.page.body);
-		this.render_picker();
-		this.$workbench = $("<div>").appendTo(this.$container).hide();
+		this.$container = $('<div class="rw rw-shell">').appendTo(this.page.body);
+		const $layout = $('<div class="rw-layout">').appendTo(this.$container);
+		this.$nav = $('<aside class="rw-nav">').appendTo($layout);
+		this.$main = $('<main class="rw-main">').appendTo($layout);
+
+		this.render_nav();
+
+		this.$empty_state = $('<div class="rw-empty-state">').appendTo(this.$main);
+		this.$workbench = $("<div>").appendTo(this.$main).hide();
 		this.render_report_card();
 		this.render_sheets_card();
+		this.render_empty_state();
 	}
 
-	// ---- picker: pick an existing report, browse recent ones, or create one --
+	// ---- navigator -----------------------------------------------------------
 
-	render_picker() {
-		const $card = $('<div class="rw-card">').appendTo(this.$container);
-		const $row = $('<div class="rw-picker-row">').appendTo($card);
-
-		const $field_wrap = $('<div class="rw-field">').appendTo($row);
-		this.report_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Link",
-				fieldname: "report",
-				label: __("Report"),
-				options: "Inspection Report",
-				onchange: () => {
-					const value = this.report_control.get_value();
-					if (value) this.load_report(value);
-				},
-			},
-			parent: $field_wrap[0],
-			render_input: true,
-		});
-		this.report_control.refresh();
-
-		this.$new_btn = $(`<button class="rw-btn rw-btn-primary">${__("+ New Report")}</button>`).appendTo($row);
-		this.$new_btn.on("click", () => this.open_new_report_dialog());
-
-		$(`<button class="rw-btn">${__("Import Word")}</button>`)
-			.appendTo($row)
+	render_nav() {
+		const $head = $('<div class="rw-nav-head">').appendTo(this.$nav);
+		$(`<div class="rw-nav-title">${__("Reports")}</div>`).appendTo($head);
+		const $head_actions = $('<div class="rw-nav-actions">').appendTo($head);
+		$(`<button class="rw-btn rw-btn-sm" title="${__("Import Word reports")}">${__("Import")}</button>`)
+			.appendTo($head_actions)
 			.on("click", () => this.open_import_dialog());
+		$(`<button class="rw-btn rw-btn-sm rw-btn-primary">${__("+ New")}</button>`)
+			.appendTo($head_actions)
+			.on("click", () => this.open_new_report_dialog());
 
-		const $recent_toolbar = $('<div class="rw-recent-toolbar">').appendTo($card);
-		this.$recent_title = $(`<div class="rw-recent-title">${__("Recent Reports")}</div>`).appendTo($recent_toolbar);
-		this.$recent_toggle = $(`<a href="#" class="rw-recent-toggle"></a>`).appendTo($recent_toolbar);
-		this.$recent_toggle.on("click", (e) => {
-			e.preventDefault();
-			this.toggle_recent(!this.recent_expanded);
-		});
+		const $filters = $('<div class="rw-nav-filters">').appendTo(this.$nav);
+		this.$nav_search = $(`<input type="search" class="rw-search" placeholder="${__("Search area, period, job no…")}">`)
+			.appendTo($filters)
+			.on("input", () => {
+				this.nav_search = (this.$nav_search.val() || "").toLowerCase().trim();
+				this.render_nav_list();
+			});
 
-		// Everything below the toolbar collapses as one unit - see
-		// toggle_recent(). A growing customer/report count is exactly why
-		// this exists: browsing is opt-in once you're not looking for one.
-		this.$recent_body = $("<div>").appendTo($card);
-
-		const $filters = $('<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">').appendTo(
-			this.$recent_body
-		);
-		this.$recent_search = $(
-			`<input type="text" class="rw-search" placeholder="${__("Search area, period...")}">`
-		).appendTo($filters);
-		this.$recent_search.on("input", () => {
-			this.recent_search = (this.$recent_search.val() || "").toLowerCase().trim();
-			this.render_recent_table();
-		});
-
-		const $customer_wrap = $('<div class="rw-field" style="min-width:200px">').appendTo($filters);
-		this.recent_customer_control = frappe.ui.form.make_control({
+		const $customer_wrap = $('<div class="rw-field rw-nav-customer">').appendTo($filters);
+		this.nav_customer_control = frappe.ui.form.make_control({
 			df: {
 				fieldtype: "Link",
-				fieldname: "recent_customer",
-				placeholder: __("Customer"),
+				fieldname: "nav_customer",
+				placeholder: __("All customers"),
 				options: "Customer",
 				onchange: () => {
-					this.recent_customer_filter = this.recent_customer_control.get_value();
-					this.render_recent_table();
+					this.nav_customer = this.nav_customer_control.get_value();
+					this.render_nav_list();
 				},
 			},
 			parent: $customer_wrap[0],
 			render_input: true,
 		});
-		this.recent_customer_control.refresh();
+		this.nav_customer_control.refresh();
 
-		this.$recent_chips = $('<div class="rw-chips">').appendTo($filters);
+		this.$nav_chips = $('<div class="rw-chips">').appendTo($filters);
 		[
 			["all", __("All")],
 			["Draft", __("Draft")],
 			["Issued", __("Issued")],
 		].forEach(([key, label]) => {
-			const $chip = $(`<button class="rw-chip" data-key="${key}">${label}</button>`).appendTo(this.$recent_chips);
-			if (key === "all") $chip.addClass("active");
-			$chip.on("click", () => {
-				this.recent_status_filter = key;
-				this.$recent_chips.find(".rw-chip").removeClass("active");
-				$chip.addClass("active");
-				this.render_recent_table();
-			});
+			$(`<button class="rw-chip" data-key="${key}">${label}</button>`)
+				.toggleClass("active", key === this.nav_status)
+				.appendTo(this.$nav_chips)
+				.on("click", (e) => {
+					this.nav_status = key;
+					this.$nav_chips.find(".rw-chip").removeClass("active");
+					$(e.currentTarget).addClass("active");
+					this.render_nav_list();
+				});
 		});
 
-		this.$recent_table_wrap = $('<div class="rw-table-wrap">').appendTo(this.$recent_body);
-
-		this.toggle_recent(true);
+		this.$nav_list = $('<div class="rw-nav-list">').appendTo(this.$nav);
 	}
 
-	toggle_recent(expanded) {
-		this.recent_expanded = expanded;
-		this.$recent_body.toggle(expanded);
-		this.$recent_toggle.text(expanded ? __("Hide") : __("Show ({0})", [this.recent_rows.length]));
-	}
-
-	load_recent_reports() {
-		frappe
+	load_nav_reports() {
+		return frappe
 			.call({
 				method: "frappe.client.get_list",
 				args: {
@@ -229,49 +202,151 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 						"report_date",
 						"status",
 						"readings_only",
+						"service_reference",
 					],
 					// "creation" alone is ambiguous once the area.area_name fetch joins
 					// in tabArea (it has its own creation column too) - qualify it.
 					order_by: "report_date desc, `tabInspection Report`.creation desc",
-					limit_page_length: 100,
+					limit_page_length: 1000,
 				},
 			})
 			.then((r) => {
-				this.recent_rows = r.message || [];
-				this.render_recent_table();
-				this.toggle_recent(this.recent_expanded); // refresh the "Show (N)" count
+				this.nav_rows = r.message || [];
+				this.render_nav_list();
+				this.render_empty_state();
 			});
 	}
 
-	render_recent_table() {
-		const rows = this.recent_rows.filter((row) => {
-			if (this.recent_status_filter !== "all" && row.status !== this.recent_status_filter) return false;
-			if (this.recent_customer_filter && row.customer !== this.recent_customer_filter) return false;
-			if (!this.recent_search) return true;
-			const haystack = [row.area_name, row.period_label].filter(Boolean).join(" ").toLowerCase();
-			return haystack.includes(this.recent_search);
+	get_nav_groups() {
+		const rows = this.nav_rows.filter((row) => {
+			if (this.nav_status !== "all" && row.status !== this.nav_status) return false;
+			if (this.nav_customer && row.customer !== this.nav_customer) return false;
+			if (!this.nav_search) return true;
+			return [row.area_name, row.period_label, row.service_reference, row.customer, row.name]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase()
+				.includes(this.nav_search);
 		});
 
-		this.$recent_table_wrap.empty();
-		if (!rows.length) {
-			this.$recent_table_wrap.html(`<div class="rw-empty">${__("No reports found.")}</div>`);
+		// One group per customer + area, alphabetical; reports inside stay in
+		// the query's newest-first order.
+		const groups = new Map();
+		rows.forEach((row) => {
+			const key = `${row.customer}\u0000${row.area}`;
+			if (!groups.has(key)) {
+				groups.set(key, { key, customer: row.customer, area_name: row.area_name || row.area, rows: [] });
+			}
+			groups.get(key).rows.push(row);
+		});
+		return [...groups.values()].sort(
+			(a, b) => (a.customer || "").localeCompare(b.customer || "") || (a.area_name || "").localeCompare(b.area_name || "")
+		);
+	}
+
+	render_nav_list() {
+		this.$nav_list.empty();
+		const groups = this.get_nav_groups();
+		if (!groups.length) {
+			$(`<div class="rw-nav-empty">${
+				this.nav_rows.length ? __("No reports match.") : __("No reports yet - create one or import Word reports.")
+			}</div>`).appendTo(this.$nav_list);
 			return;
 		}
 
-		const $table = $('<table class="rw-table">').appendTo(this.$recent_table_wrap);
-		$table.append(
-			`<thead><tr><th>${__("Customer")}</th><th>${__("Area")}</th><th>${__("Period")}</th><th>${__("Status")}</th></tr></thead>`
-		);
-		const $tbody = $("<tbody>").appendTo($table);
-		rows.forEach((row) => {
-			const $tr = $("<tr>").appendTo($tbody);
-			$("<td>").text(row.customer || "").appendTo($tr);
-			$("<td>").text(row.area_name || row.area || "").appendTo($tr);
-			const $period = $('<td class="rw-mono">').text(row.period_label || "").appendTo($tr);
-			if (row.readings_only) $(`<span class="rw-tag">${__("readings only")}</span>`).appendTo($period);
-			$("<td>").html(rw_badge(row.status, RW_REPORT_STATUS_HEX[row.status])).appendTo($tr);
-			$tr.on("click", () => this.report_control.set_value(row.name));
+		const several_customers = new Set(groups.map((g) => g.customer)).size > 1;
+		const searching = Boolean(this.nav_search);
+		let customer_shown = null;
+
+		groups.forEach((group) => {
+			if (several_customers && group.customer !== customer_shown) {
+				customer_shown = group.customer;
+				$('<div class="rw-nav-customer-head">').text(group.customer).appendTo(this.$nav_list);
+			}
+
+			// Open when searching, when it holds the selected report, or when
+			// the user opened it; otherwise folded, so 20+ areas stay scannable.
+			const has_active = group.rows.some((r) => r.name === this.report);
+			const open = searching || has_active || this.nav_open.has(group.key);
+
+			const $group = $('<div class="rw-nav-group">').toggleClass("open", open).appendTo(this.$nav_list);
+			const drafts = group.rows.filter((r) => r.status === "Draft").length;
+			$(`<button class="rw-nav-group-head">
+				<span class="rw-nav-caret"></span>
+				<span class="rw-nav-area"></span>
+				${drafts ? `<span class="rw-nav-draft-count" title="${__("Drafts")}">${drafts}</span>` : ""}
+				<span class="rw-nav-count">${group.rows.length}</span>
+			</button>`)
+				.find(".rw-nav-area")
+				.text(group.area_name)
+				.attr("title", group.area_name)
+				.end()
+				.appendTo($group)
+				.on("click", () => {
+					const now_open = !$group.hasClass("open");
+					$group.toggleClass("open", now_open);
+					if (now_open) this.nav_open.add(group.key);
+					else this.nav_open.delete(group.key);
+				});
+
+			const $items = $('<div class="rw-nav-items">').appendTo($group);
+			group.rows.forEach((row) => {
+				const $item = $(`<a class="rw-nav-item" href="/app/report-workbench/${encodeURIComponent(row.name)}">
+					<span class="rw-nav-dot" style="background:${RW_REPORT_STATUS_HEX[row.status] || "#8a94a0"}"
+						title="${frappe.utils.escape_html(row.status || "")}"></span>
+					<span class="rw-nav-period"></span>
+					<span class="rw-nav-sub"></span>
+				</a>`)
+					.toggleClass("active", row.name === this.report)
+					.toggleClass("readings-only", Boolean(row.readings_only))
+					.appendTo($items);
+				$item.find(".rw-nav-period").text(row.period_label || row.report_date || row.name);
+				$item.find(".rw-nav-sub").text(row.readings_only ? __("readings only") : row.service_reference || row.name);
+				$item.on("click", (e) => {
+					if (e.ctrlKey || e.metaKey || e.shiftKey) return; // let the browser open a new tab
+					e.preventDefault();
+					this.select_report(row.name);
+				});
+			});
 		});
+
+		const $active = this.$nav_list.find(".rw-nav-item.active");
+		if ($active.length) $active[0].scrollIntoView({ block: "nearest" });
+	}
+
+	// ---- selection <-> URL -----------------------------------------------------
+
+	select_report(name) {
+		frappe.set_route("report-workbench", name);
+	}
+
+	sync_route() {
+		const route = frappe.get_route();
+		if (route[0] !== "report-workbench") return;
+		const name = route[1] ? decodeURIComponent(route[1]) : null;
+		if (name && name !== this.report) {
+			this.load_report(name);
+		} else if (!name && this.report) {
+			this.report = null;
+			this.report_doc = null;
+			this.$workbench.hide();
+			this.render_empty_state();
+			this.render_nav_list();
+		}
+	}
+
+	render_empty_state() {
+		this.$empty_state.toggle(!this.report).empty();
+		if (this.report) return;
+		const rows = this.nav_rows || [];
+		const drafts = rows.filter((r) => r.status === "Draft").length;
+		const areas = new Set(rows.map((r) => `${r.customer}\u0000${r.area}`)).size;
+		$(`<div class="rw-empty-title">${__("Pick a report on the left")}</div>`).appendTo(this.$empty_state);
+		$(`<div class="rw-empty-sub">${__("{0} reports across {1} areas · {2} in draft", [
+			rows.length,
+			areas,
+			drafts,
+		])}</div>`).appendTo(this.$empty_state);
 	}
 
 	// ---- import FR.TEC.09 Word reports ---------------------------------------
@@ -442,7 +517,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				});
 				dialog.set_primary_action(__("Close"), () => dialog.hide());
 				dialog.get_primary_btn().prop("disabled", false);
-				this.load_recent_reports();
+				this.load_nav_reports();
 				return;
 			}
 			$bar.find(".progress-bar").css("width", `${Math.round(((data.index - 1) / data.total) * 100)}%`);
@@ -506,8 +581,8 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 					.then((r) => {
 						dialog.hide();
 						frappe.show_alert({ message: __("Report {0} created", [r.message.name]), indicator: "green" });
-						this.load_recent_reports();
-						this.report_control.set_value(r.message.name);
+						this.load_nav_reports();
+						this.select_report(r.message.name);
 					})
 					.always(() => dialog.get_primary_btn().prop("disabled", false));
 			},
@@ -529,7 +604,8 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 						doc.area_name = (area_r.message && area_r.message.area_name) || doc.area;
 						this.report_doc = doc;
 						this.$workbench.show();
-						this.toggle_recent(false); // the loaded report is the focus now, not the picker
+						this.render_empty_state();
+						this.render_nav_list();
 						this.render_report_header();
 						this.load_summary();
 						this.load_sheets();
@@ -607,7 +683,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 					indicator: "green",
 				});
 				this.render_report_header();
-				this.load_recent_reports();
+				this.load_nav_reports();
 				this.render_sheets_lock_note(); // sheets didn't change, but whether they're locked did
 			})
 			.always(() => this.$toggle_status_btn.prop("disabled", false));
