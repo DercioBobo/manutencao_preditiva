@@ -71,6 +71,21 @@ const RW_STATUS_HEX = {
 
 const RW_REPORT_STATUS_HEX = { Draft: "#8a94a0", Issued: "#2e8b57" };
 
+// Fallback alarm limits when Vibration Alarm Settings is empty - the same
+// defaults as vibration.py (from the report's "Tabelas de Alarme").
+const RW_DEFAULT_BANDS = [
+	[15, 2.6, 3.8, 6.3],
+	[74, 4.4, 6.3, 10.2],
+	[295, 7.2, 10.2, 15],
+	[735, 10.5, 15, 18],
+];
+const RW_DEFAULT_ACCELERATION = [0.9, 1.5, 2.5];
+
+function rw_rgba(hex, alpha) {
+	const n = parseInt(hex.slice(1), 16);
+	return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 // An indicator light + label, not a filled pill - see report_workbench.css
 // for why (the app models real alarm/status signal, not decoration).
 function rw_badge(text, color) {
@@ -1103,51 +1118,6 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 	// sheet exists) - only the three numbers per point are editable. Reading
 	// them back is a matter of walking the rows, so a hand-built grid is a
 	// lot less risky than a Table-fieldtype control inside a raw Dialog.
-	render_sheet_readings_editor($wrap, readings) {
-		$wrap.empty();
-		if (!readings || !readings.length) {
-			$wrap.html(
-				`<p class="text-muted">${__("This equipment has no measurement points configured - add them in Equipment before recording readings.")}</p>`
-			);
-			return;
-		}
-
-		const $table = $('<table class="rw-readings">').appendTo($wrap);
-		$table.append(
-			`<thead><tr><th>${__("Point")}</th><th>mm/s</th><th>g's</th><th>${__("Temp.")} (°C)</th></tr></thead>`
-		);
-		const $tbody = $("<tbody>").appendTo($table);
-
-		readings.forEach((row) => {
-			const $tr = $("<tr>").attr("data-point", row.point || "").appendTo($tbody);
-			$(`<td class="rw-readings-point">`).text(row.point || "").appendTo($tr);
-			[
-				["velocity_mm_s", "rw-read-velocity"],
-				["acceleration_g", "rw-read-acceleration"],
-				["temperature_c", "rw-read-temp"],
-			].forEach(([fieldname, cls]) => {
-				const $input = $(`<input type="number" step="any" class="${cls}">`).val(
-					row[fieldname] != null ? row[fieldname] : ""
-				);
-				$("<td>").append($input).appendTo($tr);
-			});
-		});
-	}
-
-	collect_sheet_readings($wrap) {
-		const readings = [];
-		$wrap.find("tr[data-point]").each((_, tr) => {
-			const $tr = $(tr);
-			readings.push({
-				point: $tr.attr("data-point"),
-				velocity_mm_s: $tr.find(".rw-read-velocity").val() || null,
-				acceleration_g: $tr.find(".rw-read-acceleration").val() || null,
-				temperature_c: $tr.find(".rw-read-temp").val() || null,
-			});
-		});
-		return readings;
-	}
-
 	// Gallery editor: thumbnails with an editable caption under each, a
 	// remove button, and an "Add Image" control that appends rather than
 	// replacing - so a sheet can carry as many photos as it needs, each
@@ -1203,119 +1173,348 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		control.refresh();
 	}
 
-	get_sheet_dialog_fields(data) {
-		const suggested = data.suggested_severity;
-		const overridden = !!(data.severity && data.severity !== suggested);
+	// ---- sheet editor dialog ------------------------------------------------------
+	//
+	// Readings on the left (previous -> now, the change, coloured live against
+	// the alarm tables as you type) with the equipment's trend underneath;
+	// the diagnosis on the right. ‹ › and "Save & Next" walk through the
+	// sheets in the order the list shows them, so a whole report can be
+	// entered without closing the dialog.
 
-		return [
-			{ fieldtype: "HTML", fieldname: "equipment_display", options: "" },
-			{ fieldtype: "Section Break", label: __("Readings") },
-			{ fieldtype: "HTML", fieldname: "readings_html", options: "" },
-			{
-				fieldtype: "HTML",
-				fieldname: "suggested_note",
-				options: `<div class="rw-suggested-note">${__("Severity suggested by the readings")}: <b>${
-					suggested || "—"
-				}</b> (${__("recalculated on save")})</div>`,
-			},
-			{ fieldtype: "Percent", fieldname: "tolerance_percent", label: __("Tolerance (%)") },
-			{ fieldtype: "Section Break", label: __("Diagnosis") },
-			{ fieldtype: "Small Text", fieldname: "defects", label: __("Defects Found") },
-			{ fieldtype: "Column Break" },
-			{ fieldtype: "Small Text", fieldname: "recommendations", label: __("Recommendations") },
-			{ fieldtype: "Section Break" },
-			{ fieldtype: "Small Text", fieldname: "follow_up", label: __("Actions Taken / Follow-up") },
-			{ fieldtype: "Section Break" },
-			{
-				fieldtype: "Check",
-				fieldname: "override_severity",
-				label: __("Override suggested severity"),
-				default: overridden ? 1 : 0,
-				description: __(
-					"Leave unchecked for severity to follow the readings automatically. Use this when the diagnosis (e.g. a bearing defect seen in the spectrum) is worse than the readings alone indicate."
-				),
-			},
-			{
-				fieldtype: "Select",
-				fieldname: "severity",
-				label: __("Severity"),
-				options: RW_SEVERITY_OPTIONS.join("\n"),
-				depends_on: "eval:doc.override_severity",
-				mandatory_depends_on: "eval:doc.override_severity",
-			},
-			{ fieldtype: "Section Break", label: __("Images") },
-			{ fieldtype: "HTML", fieldname: "images_html", options: "" },
-		];
+	// The alarm limits in force (Vibration Alarm Settings), cached for the
+	// page - the same values vibration.py judges with on save.
+	get_alarm_limits() {
+		if (!this._limits_promise) {
+			this._limits_promise = frappe
+				.call({ method: "frappe.client.get", args: { doctype: "Vibration Alarm Settings", name: "Vibration Alarm Settings" } })
+				.then((r) => {
+					const s = r.message || {};
+					const bands = (s.bands || [])
+						.map((b) => [b.max_power_kw, b.acceptable_mm_s, b.alarm_mm_s, b.critical_mm_s])
+						.sort((a, b) => a[0] - b[0]);
+					return {
+						bands: bands.length ? bands : RW_DEFAULT_BANDS,
+						acceleration:
+							s.acceleration_acceptable && s.acceleration_alarm && s.acceleration_critical
+								? [s.acceleration_acceptable, s.acceleration_alarm, s.acceleration_critical]
+								: RW_DEFAULT_ACCELERATION,
+					};
+				})
+				.catch(() => ({ bands: RW_DEFAULT_BANDS, acceleration: RW_DEFAULT_ACCELERATION }));
+		}
+		return this._limits_promise;
 	}
 
-	// name + optional preloaded_data (the doc just came back from an insert,
-	// so there's no reason to fetch it again) - opens the sheet editor.
+	// Same rule as vibration.classify(): blank/0 is "not measured".
+	classify_reading(value, limits, tolerance) {
+		value = flt(value);
+		if (!value || !limits) return null;
+		const factor = 1 + (flt(tolerance) || 0) / 100;
+		const [acceptable, alarm, critical] = limits.map((l) => l * factor);
+		if (value >= critical) return "Critical";
+		if (value >= alarm) return "Alarm";
+		if (value >= acceptable) return "Acceptable";
+		return "Normal";
+	}
+
+	velocity_limits(limits, power_kw) {
+		if (!flt(power_kw)) return null;
+		const band = limits.bands.find((b) => power_kw <= b[0]) || limits.bands[limits.bands.length - 1];
+		return band.slice(1);
+	}
+
 	open_sheet_dialog(name, preloaded_data) {
-		const show_dialog = (data) => {
-			// Own copy, stripped to the two business fields - see save_sheet()
-			// for why a fetched child row's own name/idx/parent metadata isn't
-			// carried forward as-is. Mutated in place by the gallery editor.
-			const images = (data.images || []).map((img) => ({ image: img.image, caption: img.caption || "" }));
+		frappe.dom.freeze(__("Opening sheet..."));
+		const doc_promise = preloaded_data
+			? Promise.resolve(preloaded_data)
+			: frappe.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } }).then((r) => r.message);
 
-			const dialog = new frappe.ui.Dialog({
-				title: __("Equipment Sheet {0}", [data.name]),
-				size: "large",
-				fields: this.get_sheet_dialog_fields(data),
-				primary_action_label: __("Save"),
-				primary_action: (values) => this.save_sheet(dialog, data, values, images),
-			});
+		Promise.all([doc_promise, this.get_alarm_limits()])
+			.then(([data, limits]) => {
+				if (this.sheet_dialog) this.sheet_dialog.hide();
+				this.show_sheet_dialog(data, limits);
+			})
+			.finally(() => frappe.dom.unfreeze());
+	}
 
-			dialog.fields_dict.equipment_display.$wrapper.html(
-				`<div class="rw-report-meta"><span>${__("Equipment")}: <b>${frappe.utils.escape_html(
-					data.equipment_description || data.equipment
-				)}</b></span><span><a href="#" class="rw-open-full-form">${__("Open Full Form")}</a></span></div>`
-			);
-			dialog.$wrapper.find(".rw-open-full-form").on("click", (e) => {
-				e.preventDefault();
-				dialog.hide();
-				frappe.set_route("Form", "Equipment Inspection", data.name);
-			});
+	show_sheet_dialog(data, limits) {
+		const esc = frappe.utils.escape_html;
+		const locked = this.report_doc && this.report_doc.status === "Issued";
+		const order = this.get_filtered_sheet_rows().map((r) => r.name);
+		const position = order.indexOf(data.name);
+		const next_name = position >= 0 ? order[position + 1] : null;
+		const prev_name = position > 0 ? order[position - 1] : null;
 
-			this.render_sheet_readings_editor(dialog.fields_dict.readings_html.$wrapper, data.readings || []);
-			this.render_image_gallery(dialog.fields_dict.images_html.$wrapper, images);
-
-			dialog.set_values({
-				tolerance_percent: data.tolerance_percent || 0,
-				defects: data.defects,
-				recommendations: data.recommendations,
-				follow_up: data.follow_up,
-				severity: data.severity || "",
-			});
-
-			dialog.show();
+		// Own copy, stripped to the two business fields - a fetched child row's
+		// name/idx/parent metadata isn't sent back. Mutated by the gallery.
+		const images = (data.images || []).map((img) => ({ image: img.image, caption: img.caption || "" }));
+		const state = {
+			severity_mode: data.severity && data.severity !== data.suggested_severity ? "manual" : "auto",
+			severity: data.severity || "",
+			dirty: false,
 		};
 
-		if (preloaded_data) {
-			show_dialog(preloaded_data);
-			return;
+		const dialog = new frappe.ui.Dialog({
+			title: __("Sheet {0}", [data.name]),
+			size: "extra-large",
+			fields: [{ fieldtype: "HTML", fieldname: "body" }],
+			primary_action_label: __("Save"),
+			primary_action: () => this.save_sheet(dialog, data, state, images),
+			secondary_action_label: next_name ? __("Save & Next") : null,
+			secondary_action: next_name ? () => this.save_sheet(dialog, data, state, images, next_name) : null,
+		});
+		this.sheet_dialog = dialog;
+		dialog.$wrapper.addClass("rw-sheet-dialog");
+
+		const $body = $('<div class="rw rw-dialog rw-sheet">').appendTo(dialog.fields_dict.body.$wrapper.empty());
+
+		// -- header: what this is, where it sits, and the walk through the list
+		const $head = $('<div class="rw-sheet-head">').appendTo($body);
+		const $who = $('<div class="rw-sheet-who">').appendTo($head);
+		$('<div class="rw-sheet-title">').text(data.equipment_description || data.equipment).appendTo($who);
+		const $meta = $('<div class="rw-report-meta">').appendTo($who);
+		$(`<a href="/app/equipment/${encodeURIComponent(data.equipment)}" target="_blank">`).text(data.equipment).appendTo($("<span>").appendTo($meta));
+		if (this.report_doc) {
+			$("<span>").text(this.report_doc.area_name || data.area).appendTo($meta);
+			$("<span>").text(this.report_doc.period_label || "").appendTo($meta);
+		}
+		$("<span>")
+			.html(
+				flt(data.power_kw)
+					? `${flt(data.power_kw)} kW`
+					: `<span class="rw-warn" title="${__("Set the rated power on the equipment to judge velocity against the alarm bands.")}">${__("kW not set")}</span>`
+			)
+			.appendTo($meta);
+
+		const $nav = $('<div class="rw-sheet-nav">').appendTo($head);
+		const nav_btn = (label, target, title) =>
+			$(`<button class="rw-btn rw-btn-sm" title="${title}">${label}</button>`)
+				.prop("disabled", !target)
+				.on("click", () => this.leave_sheet(dialog, state, () => this.open_sheet_dialog(target)));
+		nav_btn("‹", prev_name, __("Previous sheet")).appendTo($nav);
+		if (position >= 0) $(`<span class="rw-sheet-pos">${position + 1} / ${order.length}</span>`).appendTo($nav);
+		nav_btn("›", next_name, __("Next sheet")).appendTo($nav);
+		$(`<a href="#" class="rw-sheet-full">${__("Full form")}</a>`)
+			.appendTo($nav)
+			.on("click", (e) => {
+				e.preventDefault();
+				this.leave_sheet(dialog, state, () => frappe.set_route("Form", "Equipment Inspection", data.name));
+			});
+
+		if (locked) {
+			$(`<div class="rw-notes rw-sheet-lock">${__(
+				"This report is Issued - the sheet is read-only. Reopen the report to Draft to change it."
+			)}</div>`).appendTo($body);
+		}
+		if (data.readings_only) {
+			$(`<div class="rw-notes">${__(
+				"Readings only - history kept for the trend, with no diagnosis."
+			)}</div>`).appendTo($body);
 		}
 
-		frappe.dom.freeze(__("Opening sheet..."));
-		frappe
-			.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } })
-			.then((r) => show_dialog(r.message))
-			.always(() => frappe.dom.unfreeze());
+		const $grid = $('<div class="rw-sheet-grid">').appendTo($body);
+		const $left = $('<div class="rw-sheet-col">').appendTo($grid);
+		const $right = $('<div class="rw-sheet-col">').appendTo($grid);
+
+		// -- readings
+		$(`<div class="rw-sheet-section">${__("Readings")}</div>`).appendTo($left);
+		const $readings = $('<div class="rw-sheet-readings">').appendTo($left);
+		const $suggested = $('<div class="rw-suggested-note">').appendTo($left);
+
+		const readings = data.readings || [];
+		if (!readings.length) {
+			$readings.html(
+				`<p class="text-muted">${__("This equipment has no measurement points - add them on the Equipment first.")}</p>`
+			);
+		} else {
+			const show = (v) => (flt(v) ? `${flt(v)}` : "");
+			let html = `<table class="rw-readings rw-readings-v2"><thead>
+				<tr><th rowspan="2">${__("Point")}</th><th colspan="3">${__("Velocity")} (mm/s)</th>
+					<th colspan="3">${__("Acceleration")} (g's)</th><th rowspan="2">${__("Temp.")} (°C)</th></tr>
+				<tr><th class="rw-sub">${__("Prev.")}</th><th class="rw-sub">${__("Now")}</th><th class="rw-sub">Δ</th>
+					<th class="rw-sub">${__("Prev.")}</th><th class="rw-sub">${__("Now")}</th><th class="rw-sub">Δ</th></tr>
+			</thead><tbody>`;
+			readings.forEach((r) => {
+				html += `<tr data-point="${esc(r.point || "")}">
+					<td class="rw-readings-point">${esc(r.point || "")}</td>
+					<td class="rw-prev">${show(r.previous_velocity_mm_s)}</td>
+					<td><input type="number" step="any" min="0" class="rw-read-velocity" value="${show(r.velocity_mm_s)}"
+						data-prev="${flt(r.previous_velocity_mm_s) || ""}"></td>
+					<td class="rw-delta" data-for="velocity"></td>
+					<td class="rw-prev">${show(r.previous_acceleration_g)}</td>
+					<td><input type="number" step="any" min="0" class="rw-read-acceleration" value="${show(r.acceleration_g)}"
+						data-prev="${flt(r.previous_acceleration_g) || ""}"></td>
+					<td class="rw-delta" data-for="acceleration"></td>
+					<td><input type="number" step="any" class="rw-read-temp" value="${show(r.temperature_c)}"
+						placeholder="${show(r.previous_temperature_c)}"></td>
+				</tr>`;
+			});
+			html += "</tbody></table>";
+			$readings.html(html);
+		}
+
+		$(`<div class="rw-sheet-section">${__("Trend")}</div>`).appendTo($left);
+		const $trend = $('<div class="rw-sheet-trend">').appendTo($left);
+
+		// -- diagnosis
+		const $sev_block = $('<div class="rw-sheet-block">').appendTo($right);
+		$(`<div class="rw-sheet-section">${__("Severity")}</div>`).appendTo($sev_block);
+		const $sev = $('<div class="rw-sev-picker">').appendTo($sev_block);
+		const $sev_hint = $('<div class="rw-sev-hint">').appendTo($sev_block);
+
+		const $tol_row = $('<label class="rw-sheet-field rw-sheet-inline">').appendTo($sev_block);
+		$(`<span>${__("Tolerance")} (%)</span>`).appendTo($tol_row);
+		const $tolerance = $('<input type="number" step="any" min="0" max="10" class="rw-input rw-input-sm">')
+			.val(flt(data.tolerance_percent) || "")
+			.attr("placeholder", "0")
+			.appendTo($tol_row);
+
+		const textarea = (label, value, rows) => {
+			const $field = $('<label class="rw-sheet-field">').appendTo($right);
+			$(`<span>${label}</span>`).appendTo($field);
+			return $(`<textarea class="rw-input" rows="${rows}">`).val(value || "").appendTo($field);
+		};
+		const $defects = textarea(__("Defects Found"), data.defects, 3);
+		const $recommendations = textarea(__("Recommendations"), data.recommendations, 3);
+		const $follow_up = textarea(__("Actions Taken / Follow-up"), data.follow_up, 2);
+
+		$(`<div class="rw-sheet-section">${__("Photos")}</div>`).appendTo($right);
+		const $images = $("<div>").appendTo($right);
+		this.render_image_gallery($images, images);
+
+		if (data.readings_only) $right.find(".rw-sheet-block, .rw-sheet-field").hide();
+
+		// -- live evaluation: colours, deltas, suggested severity
+		const vel_limits = this.velocity_limits(limits, flt(data.power_kw));
+		const evaluate = () => {
+			const tolerance = flt($tolerance.val());
+			const found = [];
+			$readings.find("tr[data-point]").each((_i, tr) => {
+				const $tr = $(tr);
+				[
+					["velocity", vel_limits],
+					["acceleration", limits.acceleration],
+				].forEach(([kind, lim]) => {
+					const $input = $tr.find(`.rw-read-${kind}`);
+					const value = flt($input.val());
+					const severity = this.classify_reading(value, lim, tolerance);
+					if (severity) found.push(severity);
+					const color = RW_SEVERITY_HEX[severity];
+					$input.css({
+						background: color ? rw_rgba(color, 0.14) : "",
+						borderColor: color || "",
+						color: color || "",
+					});
+					const prev = flt($input.data("prev"));
+					const $delta = $tr.find(`.rw-delta[data-for="${kind}"]`);
+					if (value && prev) {
+						const diff = Math.round((value - prev) * 100) / 100;
+						$delta
+							.text(diff === 0 ? "=" : `${diff > 0 ? "▲" : "▼"} ${Math.abs(diff)}`)
+							.attr("class", `rw-delta ${diff > 0 ? "up" : diff < 0 ? "down" : ""}`);
+					} else {
+						$delta.text("").attr("class", "rw-delta");
+					}
+				});
+			});
+			const ranked = ["Normal", "Acceptable", "Alarm", "Critical"];
+			state.suggested = found.length ? found.reduce((a, b) => (ranked.indexOf(b) > ranked.indexOf(a) ? b : a)) : "";
+			$suggested.html(
+				`${__("Suggested by the readings")}: ${
+					state.suggested ? rw_badge(__(state.suggested), RW_SEVERITY_HEX[state.suggested]) : "<b>—</b>"
+				}${vel_limits ? "" : ` <span class="rw-warn">· ${__("velocity not judged (no kW)")}</span>`}`
+			);
+			render_severity();
+		};
+
+		const render_severity = () => {
+			$sev.empty();
+			const effective = state.severity_mode === "auto" ? state.suggested : state.severity;
+			$(`<button class="rw-sev-btn ${state.severity_mode === "auto" ? "active" : ""}">${__("Auto")}</button>`)
+				.appendTo($sev)
+				.on("click", () => {
+					state.severity_mode = "auto";
+					state.dirty = true;
+					render_severity();
+				});
+			RW_SEVERITY_OPTIONS.slice()
+				.reverse()
+				.forEach((sev) => {
+					const active = state.severity_mode === "manual" && state.severity === sev;
+					$(`<button class="rw-sev-btn ${active ? "active" : ""}">`)
+						.append(`<span class="rw-badge-dot" style="background:${RW_SEVERITY_HEX[sev]}"></span>`)
+						.append(document.createTextNode(__(sev)))
+						.css(active ? { borderColor: RW_SEVERITY_HEX[sev], background: rw_rgba(RW_SEVERITY_HEX[sev], 0.12) } : {})
+						.appendTo($sev)
+						.on("click", () => {
+							state.severity_mode = "manual";
+							state.severity = sev;
+							state.dirty = true;
+							render_severity();
+						});
+				});
+			$sev_hint.html(
+				state.severity_mode === "auto"
+					? `${__("Follows the readings")}: ${effective ? rw_badge(__(effective), RW_SEVERITY_HEX[effective]) : "—"}`
+					: `${__("Set by the analyst - readings changes won't overwrite it.")}`
+			);
+		};
+
+		$body.on("input", "input, textarea", () => (state.dirty = true));
+		$readings.on("input", "input", evaluate);
+		$tolerance.on("input", evaluate);
+		evaluate();
+
+		if (locked) {
+			$body.find("input, textarea").prop("disabled", true);
+			$sev.find("button").prop("disabled", true);
+			dialog.get_primary_btn().hide();
+			dialog.get_secondary_btn && dialog.get_secondary_btn().hide();
+		}
+
+		state.collect = () => ({
+			readings: $readings
+				.find("tr[data-point]")
+				.map((_i, tr) => {
+					const $tr = $(tr);
+					return {
+						point: $tr.attr("data-point"),
+						velocity_mm_s: $tr.find(".rw-read-velocity").val() || null,
+						acceleration_g: $tr.find(".rw-read-acceleration").val() || null,
+						temperature_c: $tr.find(".rw-read-temp").val() || null,
+					};
+				})
+				.get(),
+			tolerance_percent: flt($tolerance.val()) || 0,
+			defects: $defects.val(),
+			recommendations: $recommendations.val(),
+			follow_up: $follow_up.val(),
+		});
+
+		dialog.show();
+		manutencao_preditiva.render_equipment_trend($trend, data.equipment);
+		setTimeout(() => $readings.find("input").first().trigger("focus"), 200);
 	}
 
-	save_sheet(dialog, data, values, images) {
-		dialog.get_primary_btn().prop("disabled", true);
+	// Moving away with unsaved typing asks first.
+	leave_sheet(dialog, state, go) {
+		if (!state.dirty) {
+			dialog.hide();
+			return go();
+		}
+		frappe.confirm(__("Discard the changes to this sheet?"), () => {
+			dialog.hide();
+			go();
+		});
+	}
 
-		const readings = this.collect_sheet_readings(dialog.fields_dict.readings_html.$wrapper);
-		const update = {
-			readings,
-			images,
-			tolerance_percent: values.tolerance_percent || 0,
-			defects: values.defects,
-			recommendations: values.recommendations,
-			follow_up: values.follow_up,
-		};
-		if (values.override_severity && values.severity) update.severity = values.severity;
+	save_sheet(dialog, data, state, images, next_name) {
+		const update = Object.assign(state.collect(), { images });
+		// Auto: an empty severity makes the server take the suggestion again
+		// (equipment_inspection.set_severity), so switching back works too.
+		update.severity = state.severity_mode === "manual" ? state.severity : "";
 
+		dialog.disable_primary_action && dialog.disable_primary_action();
 		frappe
 			.call({
 				method: "frappe.client.set_value",
@@ -1323,10 +1522,12 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			})
 			.then(() => {
 				frappe.show_alert({ message: __("Sheet {0} saved", [data.name]), indicator: "green" });
-				dialog.hide();
+				state.dirty = false;
 				this.load_sheets();
 				this.load_summary();
+				if (next_name) this.open_sheet_dialog(next_name);
+				else dialog.hide();
 			})
-			.always(() => dialog.get_primary_btn().prop("disabled", false));
+			.always(() => dialog.enable_primary_action && dialog.enable_primary_action());
 	}
 };

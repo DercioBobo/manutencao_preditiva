@@ -654,6 +654,7 @@
 	max-width: none;
 	margin: 12px 0 0;
 	padding: 0;
+	background: transparent;
 }
 
 .rw-dialog .rw-table tbody tr {
@@ -924,5 +925,248 @@
 	.rw-nav {
 		position: static;
 		max-height: 420px;
+	}
+}
+
+/* ---- sheet editor dialog ---------------------------------------------------- */
+
+.rw-sheet-dialog .modal-dialog {
+	max-width: min(1240px, calc(100vw - 32px));
+}
+
+.rw.rw-sheet {
+	margin-top: 0;
+	font-family: var(--rw-font-sans);
+	color: var(--rw-ink);
+}
+
+.rw-sheet-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding-bottom: 12px;
+	margin-bottom: 14px;
+	border-bottom: 1px solid var(--rw-line);
+}
+
+.rw-sheet-title {
+	font-size: 18px;
+	font-weight: 700;
+	line-height: 1.25;
+}
+
+.rw-sheet-head .rw-report-meta {
+	margin-top: 4px;
+}
+
+.rw-sheet-head .rw-report-meta a {
+	color: var(--rw-accent);
+}
+
+.rw-sheet-nav {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.rw-sheet-pos {
+	font-family: var(--rw-font-mono);
+	font-size: 12px;
+	color: var(--rw-muted);
+	min-width: 56px;
+	text-align: center;
+}
+
+.rw-sheet-full {
+	margin-left: 8px;
+	font-size: 12px;
+	color: var(--rw-accent);
+}
+
+.rw-warn {
+	color: #9a6700;
+	font-weight: 600;
+}
+
+.rw-sheet-lock {
+	margin-bottom: 12px;
+}
+
+.rw-sheet-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+	gap: 24px;
+}
+
+.rw-sheet-section {
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--rw-muted);
+	margin: 0 0 8px;
+}
+
+.rw-sheet-col > .rw-sheet-section:not(:first-child) {
+	margin-top: 16px;
+}
+
+.rw-readings-v2 th {
+	text-align: center;
+	padding: 4px 6px;
+}
+
+.rw-readings-v2 th.rw-sub {
+	font-weight: 500;
+	font-size: 10.5px;
+}
+
+.rw-readings-v2 thead tr:first-child th {
+	border-bottom: 1px solid var(--rw-line);
+}
+
+.rw-readings-v2 td {
+	padding: 5px 6px;
+	vertical-align: middle;
+}
+
+.rw-readings-v2 .rw-prev {
+	font-family: var(--rw-font-mono);
+	color: var(--rw-muted);
+	text-align: right;
+	width: 56px;
+}
+
+.rw-readings-v2 input[type="number"] {
+	min-width: 64px;
+	font-weight: 600;
+}
+
+.rw-readings-v2 .rw-read-temp {
+	font-weight: 400;
+}
+
+.rw-delta {
+	font-family: var(--rw-font-mono);
+	font-size: 11px;
+	white-space: nowrap;
+	width: 58px;
+	color: var(--rw-muted);
+}
+
+.rw-delta.up {
+	color: #c43b3b;
+}
+
+.rw-delta.down {
+	color: #2e8b57;
+}
+
+.rw-sheet-trend {
+	min-height: 60px;
+}
+
+.rw-sev-picker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.rw-sev-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 11px;
+	border: 1px solid var(--rw-line-strong);
+	border-radius: 20px;
+	background: var(--rw-surface);
+	font-family: var(--rw-font-sans);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--rw-ink);
+	cursor: pointer;
+}
+
+.rw-sev-btn:hover:not(:disabled) {
+	border-color: var(--rw-muted);
+}
+
+.rw-sev-btn.active:first-child {
+	background: var(--rw-ink);
+	border-color: var(--rw-ink);
+	color: #fff;
+}
+
+.rw-sev-btn .rw-badge-dot {
+	margin: 0;
+}
+
+.rw-sev-hint {
+	margin: 6px 0 12px;
+	font-size: 12px;
+	color: var(--rw-muted);
+}
+
+.rw-sheet-field {
+	display: block;
+	margin: 0 0 12px;
+	font-weight: 400;
+}
+
+.rw-sheet-field > span {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--rw-muted);
+}
+
+.rw-sheet-inline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.rw-sheet-inline > span {
+	margin: 0;
+}
+
+.rw-input {
+	width: 100%;
+	font-family: var(--rw-font-sans);
+	font-size: 13px;
+	color: var(--rw-ink);
+	border: 1px solid var(--rw-line-strong);
+	border-radius: var(--rw-radius-sm);
+	padding: 7px 10px;
+	background: var(--rw-surface);
+	resize: vertical;
+}
+
+.rw-input:focus {
+	outline: none;
+	border-color: var(--rw-accent);
+	box-shadow: 0 0 0 3px var(--rw-accent-wash);
+}
+
+.rw-input-sm {
+	width: 90px;
+	font-family: var(--rw-font-mono);
+	text-align: right;
+}
+
+.rw-input:disabled,
+.rw-readings input:disabled {
+	background: var(--rw-surface-2);
+	cursor: default;
+}
+
+@media (max-width: 900px) {
+	.rw-sheet-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.rw-sheet-head {
+		flex-direction: column;
 	}
 }
