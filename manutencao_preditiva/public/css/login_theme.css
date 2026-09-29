@@ -1,21 +1,276 @@
-/* Login page skin - scoped to .for-login (Frappe's login page wrapper) only,
-   so it can never bleed into other website pages. Purely a hooks.py-driven
-   web_include_css asset: nothing here touches Website Settings or any other
-   DB record, so uninstalling this app removes the include and the login
-   page reverts to stock Frappe automatically. */
+/* Login page skin. Everything is scoped to body.mp-login-page, a class
+   login_theme.js adds only when the page has .for-login - so it can never
+   bleed into other website pages. Purely a hooks.py-driven web_include_css
+   asset: nothing here touches Website Settings or any other DB record, so
+   uninstalling this app removes the include and the login page reverts to
+   stock Frappe automatically.
 
-.for-login {
-	background: linear-gradient(160deg, #0f6b63 0%, #14877e 45%, #1c2b36 100%);
+   Layout: .mp-login-host is the <div> wrapping Frappe's sibling sections
+   (.for-login, .for-forgot, .for-signup, ...). It becomes a two-column grid:
+   the brand panel (added by the JS) on the left, whichever section is
+   showing on the right. Frappe toggles the sections with inline display,
+   so they only get grid placement here, never a display value. */
+
+body.mp-login-page {
+	--mp-teal: #14877e;
+	--mp-teal-dark: #0f6b63;
+	--mp-teal-wash: rgba(20, 135, 126, 0.16);
+	--mp-ink: #12181f;
+	--mp-muted: #5b6b78;
+	--mp-line: #dbe2e7;
+	--mp-surface: #ffffff;
+	--mp-surface-2: #f4f7f8;
+	background: var(--mp-surface-2);
+}
+
+/* Full-bleed: undo the website container's width/margins around the form. */
+body.mp-login-page .page-content-wrapper,
+body.mp-login-page main,
+body.mp-login-page .page_content {
+	max-width: none;
+	width: 100%;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+body.mp-login-page .page-breadcrumbs,
+body.mp-login-page .page-header-wrapper {
+	display: none;
+}
+
+.mp-login-host {
+	display: grid;
+	grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+	grid-template-rows: minmax(100vh, auto);
 	min-height: 100vh;
 }
 
-.for-login .login-content.page-card {
-	border: none;
-	border-top: 4px solid #14877e;
-	border-radius: 16px;
-	box-shadow: 0 20px 60px rgba(15, 34, 40, 0.35);
+.mp-login-host > *:not(.mp-login-brand) {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: center;
+	justify-self: center;
+	width: min(400px, calc(100% - 32px));
+	padding: 40px 0;
 }
 
-.for-login .sign-up-message {
+/* ---- brand panel ---------------------------------------------------------- */
+
+.mp-login-brand {
+	grid-column: 1;
+	grid-row: 1;
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 32px;
+	padding: 48px 56px;
+	color: #fff;
+	background: radial-gradient(120% 90% at 0% 0%, #1a9a8f 0%, transparent 60%),
+		linear-gradient(160deg, var(--mp-teal-dark) 0%, var(--mp-teal) 45%, #1c2b36 100%);
+}
+
+.mp-login-logo {
+	display: inline-flex;
+	align-items: center;
+	padding: 10px 14px;
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0 8px 24px rgba(10, 30, 36, 0.25);
+}
+
+.mp-login-logo img {
+	display: block;
+	height: 44px;
+	width: auto;
+}
+
+.mp-login-brand-body {
+	position: relative;
+	z-index: 1;
+	max-width: 440px;
+}
+
+.mp-login-title {
+	margin: 0 0 12px;
+	font-size: 38px;
+	font-weight: 700;
+	line-height: 1.1;
+	letter-spacing: -0.01em;
+	color: #fff;
+}
+
+.mp-login-tagline {
+	margin: 0 0 28px;
+	font-size: 16px;
+	line-height: 1.5;
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.mp-login-points {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.mp-login-points li {
+	position: relative;
+	padding: 7px 0 7px 28px;
+	font-size: 14.5px;
+	color: rgba(255, 255, 255, 0.92);
+}
+
+.mp-login-points li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 50%;
+	width: 16px;
+	height: 16px;
+	margin-top: -8px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.18)
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.2 2.2 4.8-4.8' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+		center / 16px no-repeat;
+}
+
+/* A vibration trace across the panel - the product in one line. */
+.mp-login-wave {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 18%;
+	width: 100%;
+	height: 120px;
+	color: rgba(255, 255, 255, 0.14);
+	pointer-events: none;
+}
+
+.mp-login-brand-foot {
+	position: relative;
+	z-index: 1;
+	font-size: 12.5px;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- form side ------------------------------------------------------------- */
+
+/* The brand panel already carries the logo - the form side just gets a
+   left-aligned heading. */
+body.mp-login-page .page-card-head {
+	text-align: left;
+	padding: 0;
+	margin-bottom: 24px;
+}
+
+body.mp-login-page .page-card-head .app-logo {
 	display: none;
+}
+
+body.mp-login-page .page-card-head h4 {
+	margin: 0;
+	font-size: 24px;
+	font-weight: 700;
+	color: var(--mp-ink);
+}
+
+body.mp-login-page .login-content.page-card {
+	max-width: none;
+	margin: 0;
+	padding: 28px;
+	border: 1px solid var(--mp-line);
+	border-radius: 14px;
+	background: var(--mp-surface);
+	box-shadow: 0 1px 2px rgba(18, 24, 31, 0.04), 0 20px 40px -24px rgba(18, 24, 31, 0.25);
+}
+
+body.mp-login-page .page-card-body {
+	padding: 0;
+}
+
+body.mp-login-page .form-control {
+	background: var(--mp-surface-2);
+	border: 1px solid transparent;
+	transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+body.mp-login-page .form-control:focus {
+	background: var(--mp-surface);
+	border-color: var(--mp-teal);
+	box-shadow: 0 0 0 3px var(--mp-teal-wash);
+}
+
+body.mp-login-page .forgot-password-message a,
+body.mp-login-page .toggle-password,
+body.mp-login-page .for-forgot a,
+body.mp-login-page .for-signup a {
+	color: var(--mp-teal-dark) !important;
+	font-weight: 500;
+}
+
+body.mp-login-page .page-card-actions {
+	padding: 0;
+	margin-top: 8px;
+}
+
+body.mp-login-page .btn-primary {
+	height: 40px;
+	font-size: 14px;
+	font-weight: 600;
+	background: var(--mp-teal);
+	border-color: var(--mp-teal);
+	color: #fff;
+	border-radius: 8px;
+}
+
+body.mp-login-page .btn-primary:hover,
+body.mp-login-page .btn-primary:focus {
+	background: var(--mp-teal-dark);
+	border-color: var(--mp-teal-dark);
+}
+
+body.mp-login-page .sign-up-message {
+	display: none;
+}
+
+/* ---- narrow screens: brand panel becomes a compact header ------------------ */
+
+@media (max-width: 900px) {
+	.mp-login-host {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto 1fr;
+	}
+
+	.mp-login-host > *:not(.mp-login-brand) {
+		grid-column: 1;
+		grid-row: 2;
+		align-self: start;
+		padding: 28px 0 40px;
+	}
+
+	.mp-login-brand {
+		padding: 24px 16px 28px;
+		gap: 16px;
+	}
+
+	.mp-login-logo img {
+		height: 34px;
+	}
+
+	.mp-login-title {
+		font-size: 26px;
+		margin-bottom: 6px;
+	}
+
+	.mp-login-tagline {
+		margin: 0;
+		font-size: 14px;
+	}
+
+	.mp-login-points,
+	.mp-login-wave,
+	.mp-login-brand-foot {
+		display: none;
+	}
 }
