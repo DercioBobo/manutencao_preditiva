@@ -165,7 +165,7 @@
    "link_fieldname": "report"
   }
  ],
- "modified": "2026-09-28 12:00:00.000000",
+ "modified": "2026-09-29 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Inspection Report",
@@ -205,8 +205,8 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "autoname": "format:IR-{YYYY}-{####}",
- "naming_rule": "Expression",
+ "autoname": "IR.-.YY.-.##",
+ "naming_rule": "Expression (old style)",
  "track_changes": 1,
  "search_fields": "customer,area,period_label"
 }

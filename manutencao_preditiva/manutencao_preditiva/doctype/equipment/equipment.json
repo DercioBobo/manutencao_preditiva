@@ -101,7 +101,7 @@
    "link_fieldname": "equipment"
   }
  ],
- "modified": "2026-09-21 00:00:00.000000",
+ "modified": "2026-09-29 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Equipment",
@@ -141,8 +141,8 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "autoname": "format:IEQ-{#####}",
- "naming_rule": "Expression",
+ "autoname": "EQ-.##",
+ "naming_rule": "Expression (old style)",
  "title_field": "description",
  "show_title_field_in_link": 1,
  "search_fields": "description,machine,customer",
