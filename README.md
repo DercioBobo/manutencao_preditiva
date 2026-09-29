@@ -208,10 +208,16 @@ retiring it - see `WORKFLOW.md` if that calculus changes later.
 Dedicated page for the client (`/app/meus-achados`, role **Cliente
 Portal**), with two tabs:
 
-- **Dashboard** — stat tiles (total, open, critical, overdue), composition
-  charts by severity/status, top-areas/top-equipment rankings, and a trend
-  chart of findings by report over time. Always reflects the client's full
-  history, not just whatever page of the list is currently loaded.
+- **Overview** — modelled on the client's own plant dashboard. A month
+  picker drives a *Plant overview*: a donut of every active equipment's
+  state that month (severity, Readings only, or Not inspected = active
+  Equipment with no sheet that month) next to a per-area table (condition
+  bar, inspected x/y, Alarm/Critical, date). Below it: *Inspection
+  coverage* (inspected / active equipment) and *Action compliance*
+  (Done + Not Applicable over all Acceptable/Alarm/Critical findings, with
+  open/overdue), *Findings per area* for the month, *Condition over time*,
+  and at the bottom the *Equipment evolution* matrix (was its own tab).
+  Built from `trend.condition_history` plus the client's Equipment list.
 - **Findings** — search, severity/status filter, and the list itself.
   Clicking a finding opens a dialog with the read-only detail and the
   response section (action taken, responsible, due date, status, completion

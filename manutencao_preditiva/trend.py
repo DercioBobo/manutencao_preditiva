@@ -60,6 +60,7 @@ def condition_history(max_periods=12):
 			continue
 		row["cells"][key] = {
 			"sheet": s.name,
+			"report_date": s.report_date,
 			"severity": s.severity or None,
 			"readings_only": s.readings_only,
 			"action_status": s.action_status,

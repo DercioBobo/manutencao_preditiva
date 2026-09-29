@@ -696,8 +696,23 @@
 	font-variant-numeric: tabular-nums;
 }
 
+.ma-area-table td:nth-child(2) {
+	width: 28%;
+	min-width: 90px;
+}
+
 .ma-area-table td:nth-child(3) {
-	width: 40%;
+	width: 24%;
+	min-width: 110px;
+}
+
+.ma-area-table .ma-area-name {
+	font-weight: 600;
+	white-space: normal;
+}
+
+.ma-area-table .ma-area-date {
+	color: var(--ma-muted);
 }
 
 .ma-mini-bar {
@@ -947,4 +962,279 @@
 	.ma-tiles {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
+}
+
+/* ---- Overview: plant overview (month donut + areas), KPIs, per-area bars ---- */
+
+.ma-ov-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px 14px;
+	margin-bottom: 12px;
+}
+
+.ma-ov-heading {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.ma-ov-caption {
+	color: var(--ma-muted);
+	font-size: 12.5px;
+	flex: 1 1 auto;
+}
+
+.ma-plant {
+	display: grid;
+	grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+	gap: 24px;
+	align-items: start;
+	margin-bottom: 16px;
+}
+
+.ma-donut-wrap {
+	display: flex;
+	align-items: center;
+	gap: 22px;
+	flex-wrap: wrap;
+}
+
+.ma-donut {
+	position: relative;
+	width: 180px;
+	height: 180px;
+	flex: 0 0 auto;
+}
+
+.ma-donut svg {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+.ma-donut-center {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.ma-donut-total {
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+	font-size: 34px;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.ma-donut-label {
+	margin-top: 4px;
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--ma-muted);
+}
+
+.ma-donut-legend {
+	flex: 1 1 150px;
+	min-width: 150px;
+}
+
+.ma-legend-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	font-size: 12.5px;
+}
+
+.ma-legend-row.is-zero {
+	color: var(--ma-gray);
+}
+
+.ma-legend-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+}
+
+.ma-legend-label {
+	flex: 1 1 auto;
+}
+
+.ma-legend-value {
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.ma-plant-areas {
+	max-height: 320px;
+	overflow: auto;
+}
+
+.ma-progress {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ma-progress-track {
+	flex: 1 1 auto;
+	height: 6px;
+	border-radius: 3px;
+	background: var(--ma-surface-2);
+	overflow: hidden;
+}
+
+.ma-progress-fill {
+	height: 100%;
+	border-radius: 3px;
+	background: var(--ma-amber);
+}
+
+.ma-progress-fill.is-full {
+	background: var(--ma-green);
+}
+
+.ma-progress-text {
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+	font-size: 12px;
+	color: var(--ma-muted);
+}
+
+.ma-kpis {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.ma-kpi {
+	background: var(--ma-surface);
+	border: 1px solid var(--ma-line);
+	border-radius: var(--ma-radius);
+	padding: 14px 18px;
+}
+
+.ma-kpi-label {
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--ma-muted);
+}
+
+.ma-kpi-value {
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+	font-size: 26px;
+	font-weight: 600;
+	line-height: 1.2;
+	margin-top: 4px;
+}
+
+.ma-kpi-sub {
+	font-size: 12px;
+	color: var(--ma-muted);
+	margin-bottom: 10px;
+}
+
+.ma-kpi-track {
+	height: 5px;
+}
+
+.ma-ov-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 16px;
+	margin-bottom: 28px;
+}
+
+.ma-ov-grid .ma-chart-card + .ma-chart-card {
+	margin-top: 0;
+}
+
+.ma-hbar-row {
+	margin-bottom: 12px;
+	cursor: pointer;
+}
+
+.ma-hbar-row:hover .ma-hbar {
+	opacity: 0.85;
+}
+
+.ma-hbar-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 12.5px;
+	margin-bottom: 4px;
+}
+
+.ma-hbar-head b {
+	font-family: var(--ma-font-mono);
+}
+
+.ma-hbar {
+	display: flex;
+	height: 18px;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.ma-hbar-seg {
+	min-width: 18px;
+	color: #fff;
+	font-size: 10.5px;
+	font-weight: 600;
+	line-height: 18px;
+	text-align: center;
+}
+
+.ma-hbar-legend {
+	margin-top: 4px;
+}
+
+.ma-section {
+	scroll-margin-top: 70px;
+}
+
+.ma-section-title {
+	font-size: 16px;
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+
+.ma-chip-count {
+	margin-left: 6px;
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+	opacity: 0.7;
+}
+
+@media (max-width: 900px) {
+	.ma-plant,
+	.ma-ov-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 560px) {
+	.ma-kpis {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.ma-donut-wrap {
+		justify-content: center;
+	}
+}
+
+.ma-area-table th.ma-num {
+	font-family: var(--ma-font-sans);
 }
