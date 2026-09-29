@@ -76,30 +76,14 @@
 .ma-tab.active {
 	color: var(--ma-accent-ink);
 	border-bottom-color: var(--ma-accent);
-}
-
-/* ---- dashboard: stat tiles + charts --------------------------------------- */
-
-.ma-dashboard {
-	margin-bottom: 28px;
-}
-
-.ma-dashboard-filter-note {
-	font-size: 12px;
-	color: var(--ma-muted);
-	margin-bottom: 10px;
-}
-
-.ma-dashboard-filter-note b {
-	color: var(--ma-ink);
-}
+}/* ---- dashboard: stat tiles + charts --------------------------------------- */
 
 /* Read like small instrument counters, not generic KPI cards: a hairline
  * strip, not four separately-shadowed boxes (the report panel elsewhere
  * in the app is the only place that gets real elevation). */
 .ma-tiles {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 	background: var(--ma-surface);
 	border: 1px solid var(--ma-line);
 	border-radius: var(--ma-radius);
@@ -137,13 +121,6 @@
 
 .ma-tile-critical .ma-tile-value {
 	color: var(--ma-red);
-}
-
-.ma-charts-row {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 16px;
-	margin-bottom: 16px;
 }
 
 .ma-chart-card {
@@ -221,109 +198,9 @@
 	font-size: 11px;
 	color: var(--ma-muted);
 	margin-top: 8px;
-}
-
-/* ---- composition bar (severidade / estado breakdown) ----------------------- */
-
-.ma-comp-bar {
-	display: flex;
-	height: 18px;
-	border-radius: 4px;
-	overflow: hidden;
-	border: 1px solid var(--ma-line-strong);
-	background: var(--ma-surface-2);
-	margin: 10px 0 16px;
-}
-
-.ma-comp-seg {
-	height: 100%;
-	position: relative;
-}
-
-.ma-comp-seg:not(:last-child)::after {
-	content: "";
-	position: absolute;
-	right: 0;
-	top: 0;
-	bottom: 0;
-	width: 1px;
-	background: rgba(255, 255, 255, 0.45);
-}
-
-.ma-comp-legend {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.ma-comp-legend-item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 12px;
-}
-
-.ma-comp-dot {
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	flex: 0 0 auto;
-	box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.25);
-}
-
-.ma-comp-legend-label {
-	flex: 1 1 auto;
-	color: var(--ma-ink);
-	font-weight: 600;
-}
-
-.ma-comp-legend-value {
-	color: var(--ma-muted);
-	font-family: var(--ma-font-mono);
-	font-variant-numeric: tabular-nums;
-}
+}/* ---- composition bar (severidade / estado breakdown) ----------------------- */
 
 /* ---- ranking list (top áreas / equipamentos) -------------------------------- */
-
-.ma-rank-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 6px 0;
-}
-
-.ma-rank-label {
-	flex: 0 0 150px;
-	font-size: 12px;
-	color: var(--ma-ink);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.ma-rank-bar-wrap {
-	flex: 1 1 auto;
-	height: 8px;
-	background: var(--ma-surface-2);
-	border-radius: 4px;
-	overflow: hidden;
-}
-
-.ma-rank-bar {
-	height: 100%;
-	background: var(--ma-accent);
-	border-radius: 4px;
-}
-
-.ma-rank-value {
-	flex: 0 0 28px;
-	text-align: right;
-	font-family: var(--ma-font-mono);
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--ma-ink);
-	font-variant-numeric: tabular-nums;
-}
 
 @media (max-width: 720px) {
 	.ma-tiles {
@@ -331,12 +208,6 @@
 	}
 	.ma-tile:nth-child(2) {
 		border-right: none;
-	}
-	.ma-charts-row {
-		grid-template-columns: 1fr;
-	}
-	.ma-rank-label {
-		flex-basis: 100px;
 	}
 }
 
@@ -435,39 +306,6 @@
 	background: var(--ma-ink);
 	border-color: var(--ma-ink);
 	color: #fff;
-}
-
-.ma-shared-filters-stacked {
-	flex-direction: column;
-	align-items: stretch;
-}
-
-.ma-shared-filters-row {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: flex-end;
-	gap: 10px;
-}
-
-.ma-shared-filters-row:first-child {
-	align-items: center;
-}
-
-.ma-painel-filter-field {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	width: 220px;
-}
-
-.ma-painel-filter-field .form-control {
-	font-size: 13px;
-}
-
-.ma-painel-filter-label {
-	font-size: 11px;
-	font-weight: 600;
-	color: var(--ma-muted);
 }
 
 /* ---- view toggle: cartões / tabela ----------------------------------------- */
@@ -780,8 +618,333 @@
 	.ma-summary-label {
 		flex-basis: 120px;
 	}
+}
 
-	.ma-painel-filter-field {
-		width: 100%;
+/* ---- Overview --------------------------------------------------------------- */
+
+.ma-tile-good .ma-tile-value {
+	color: var(--ma-green);
+}
+
+.ma-tile-link {
+	cursor: pointer;
+	transition: background 0.1s ease;
+}
+
+.ma-tile-link:hover {
+	background: var(--ma-accent-wash);
+}
+
+.ma-tile-note {
+	margin-top: 2px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--ma-red);
+}
+
+.ma-chart-card + .ma-chart-card {
+	margin-top: 16px;
+}
+
+.ma-chart-sub {
+	margin-left: 8px;
+	font-weight: 400;
+	color: var(--ma-gray);
+}
+
+.ma-chart-hint {
+	font-size: 12px;
+	color: var(--ma-muted);
+	margin-top: 4px;
+}
+
+.ma-area-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.ma-area-table th,
+.ma-area-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--ma-line);
+	text-align: left;
+	white-space: nowrap;
+}
+
+.ma-area-table th {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--ma-muted);
+}
+
+.ma-area-table tbody tr {
+	cursor: pointer;
+}
+
+.ma-area-table tbody tr:hover {
+	background: var(--ma-accent-wash);
+}
+
+.ma-area-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.ma-area-table .ma-num {
+	text-align: right;
+	font-family: var(--ma-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.ma-area-table td:nth-child(3) {
+	width: 40%;
+}
+
+.ma-mini-bar {
+	display: flex;
+	height: 10px;
+	border-radius: 5px;
+	overflow: hidden;
+	background: var(--ma-surface-2);
+}
+
+.ma-mini-seg {
+	height: 100%;
+}
+
+/* ---- Equipment: evolution matrix ---------------------------------------------- */
+
+.ma-tab-intro {
+	font-size: 13px;
+	color: var(--ma-muted);
+	margin-bottom: 12px;
+	max-width: 760px;
+}
+
+.ma-mx-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	margin: 4px 0 12px;
+	font-size: 11.5px;
+	color: var(--ma-muted);
+}
+
+.ma-mx-legend > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ma-mx-wrap {
+	overflow: auto;
+	max-height: calc(100vh - 260px);
+	background: var(--ma-surface);
+	border: 1px solid var(--ma-line);
+	border-radius: var(--ma-radius);
+}
+
+.ma-mx {
+	border-collapse: separate;
+	border-spacing: 0;
+	width: 100%;
+	font-size: 13px;
+}
+
+.ma-mx thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: var(--ma-surface-2);
+	padding: 8px 10px;
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--ma-muted);
+	border-bottom: 1px solid var(--ma-line);
+	white-space: nowrap;
+}
+
+.ma-mx td {
+	padding: 5px 10px;
+	border-bottom: 1px solid var(--ma-line);
+}
+
+.ma-mx .ma-mx-eq {
+	position: sticky;
+	left: 0;
+	z-index: 1;
+	background: var(--ma-surface);
+	min-width: 220px;
+	max-width: 320px;
+	text-align: left;
+}
+
+.ma-mx thead .ma-mx-eq {
+	z-index: 3;
+	background: var(--ma-surface-2);
+}
+
+.ma-mx-eq-link {
+	color: var(--ma-ink);
+	font-weight: 500;
+}
+
+.ma-mx-eq-link:hover {
+	color: var(--ma-accent);
+	text-decoration: none;
+}
+
+.ma-mx-period,
+.ma-mx-td {
+	width: 64px;
+	text-align: center;
+	font-family: var(--ma-font-mono);
+}
+
+.ma-mx-cell {
+	display: inline-block;
+	width: 26px;
+	height: 16px;
+	border-radius: 4px;
+	vertical-align: middle;
+	cursor: pointer;
+	transition: transform 0.08s ease;
+}
+
+.ma-mx-td .ma-mx-cell:hover {
+	transform: scale(1.15);
+}
+
+.ma-mx-legend .ma-mx-cell {
+	width: 16px;
+	height: 11px;
+	cursor: default;
+}
+
+.ma-mx-cell.ma-mx-readings {
+	background: transparent;
+	border: 1.5px dashed var(--ma-line-strong);
+}
+
+.ma-mx-none {
+	color: var(--ma-line-strong);
+}
+
+.ma-mx-trend-col {
+	width: 90px;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.ma-mx-trend {
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.ma-mx-trend.worse {
+	color: var(--ma-red);
+}
+
+.ma-mx-trend.better {
+	color: var(--ma-green);
+}
+
+.ma-mx-trend.same {
+	color: var(--ma-gray);
+	font-weight: 400;
+}
+
+.ma-mx-group td {
+	position: sticky;
+	left: 0;
+	background: var(--ma-surface-2);
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--ma-ink);
+	padding-top: 7px;
+	padding-bottom: 7px;
+}
+
+.ma-mx-group-count {
+	margin-left: 6px;
+	font-weight: 400;
+	color: var(--ma-muted);
+}
+
+/* ---- equipment dialog (renders outside .ma - plain values, no variables) ---- */
+
+.ma-eq-meta {
+	font-size: 12px;
+	color: #5b6b78;
+	margin-bottom: 10px;
+}
+
+.ma-eq-timeline {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ma-eq-step {
+	min-width: 64px;
+	padding: 8px 6px;
+	border: 1px solid #dbe2e7;
+	border-radius: 8px;
+	text-align: center;
+}
+
+.ma-eq-step .ma-mx-cell {
+	display: inline-block;
+	width: 26px;
+	height: 16px;
+	border-radius: 4px;
+	cursor: default;
+}
+
+.ma-eq-step .ma-mx-cell.ma-mx-readings {
+	border: 1.5px dashed #b7c2ca;
+}
+
+.ma-eq-step-label {
+	margin-top: 4px;
+	font-family: "IBM Plex Mono", ui-monospace, monospace;
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.ma-eq-step-sev {
+	font-size: 11px;
+	color: #5b6b78;
+}
+
+.ma-eq-history-item {
+	padding: 10px 12px;
+	border: 1px solid #dbe2e7;
+	border-radius: 8px;
+	margin-bottom: 8px;
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+.ma-eq-history-item:hover {
+	background: #e2f0f1;
+}
+
+.ma-eq-history-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 4px;
+}
+
+.ma-eq-history-date {
+	font-family: "IBM Plex Mono", ui-monospace, monospace;
+	font-weight: 600;
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+	.ma-tiles {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 }

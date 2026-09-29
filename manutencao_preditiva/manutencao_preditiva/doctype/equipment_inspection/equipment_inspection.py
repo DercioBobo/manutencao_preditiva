@@ -108,6 +108,9 @@ class EquipmentInspection(Document):
 		self.area = report.area
 		self.report_date = report.report_date
 		self.readings_only = report.readings_only
+		# Set here, not left to fetch_from: the area is only known from the
+		# report at this point, after Frappe has already run the fetches.
+		self.area_emails = frappe.db.get_value("Area", self.area, "emails")
 
 	def load_equipment_context(self):
 		equipment = frappe.db.get_value(

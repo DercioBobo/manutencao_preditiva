@@ -7,6 +7,7 @@
   "customer",
   "technique",
   "area",
+  "area_emails",
   "report_date",
   "period_label",
   "cb_1",
@@ -53,6 +54,14 @@
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "area_emails",
+   "fieldtype": "Small Text",
+   "label": "Area Emails",
+   "read_only": 1,
+   "fetch_from": "area.emails",
+   "description": "From the Area - for email notifications."
   },
   {
    "fieldname": "report_date",
@@ -165,7 +174,7 @@
    "link_fieldname": "report"
   }
  ],
- "modified": "2026-09-29 00:00:00.000000",
+ "modified": "2026-09-29 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Inspection Report",

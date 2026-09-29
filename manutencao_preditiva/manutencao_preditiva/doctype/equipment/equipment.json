@@ -6,6 +6,7 @@
  "field_order": [
   "customer",
   "area",
+  "area_emails",
   "cb_1",
   "machine",
   "description",
@@ -35,6 +36,14 @@
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "area_emails",
+   "fieldtype": "Small Text",
+   "label": "Area Emails",
+   "read_only": 1,
+   "fetch_from": "area.emails",
+   "description": "From the Area - for email notifications."
   },
   {
    "fieldname": "cb_1",
@@ -101,7 +110,7 @@
    "link_fieldname": "equipment"
   }
  ],
- "modified": "2026-09-29 00:00:00.000000",
+ "modified": "2026-09-29 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Equipment",

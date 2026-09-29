@@ -34,7 +34,16 @@ has been run on a real bench yet**. See [Testing](#testing).
   ```
 
   It resolves to the enabled client portal logins scoped to that document's
-  customer, the same people who see it in My Findings. **Never** use
+  customer, the same people who see it in My Findings.
+- **Area contacts.** Inspection Report, Equipment and Equipment Inspection
+  each carry a read-only **Area Emails** field, copied from the Area's
+  *Emails* (and refreshed on all of them whenever the Area's list changes).
+  To also send to those contacts, add a second Recipients row with this in
+  the **CC** box:
+
+  ```
+  {{ (doc.area_emails or "") | replace("\n", ",") }}
+  ``` **Never** use
   *Receiver By Role → Cliente Portal*: that role covers every customer, so
   every client would get every other client's findings.
 
@@ -251,7 +260,7 @@ Recipients: *Receiver By Role → Tecnico de Inspecao* (the whole team), or
 <p><b>{{ doc.customer }}</b> changed the action on <b>{{ doc.equipment_description or doc.equipment }}</b> ({{ doc.severity }}) to <b>{{ doc.action_status }}</b>.</p>
 <ul>
   {% if doc.client_response %}<li>Response: {{ doc.client_response }}</li>{% endif %}
-  {% if doc.responsible %}<li>Responsible: {{ doc.responsible }}</li>{% endif %}
+  {% if doc.responsible %}<li>Responsible Person: {{ doc.responsible }}</li>{% endif %}
   {% if doc.due_date %}<li>Due: {{ frappe.utils.formatdate(doc.due_date) }}</li>{% endif %}
   {% if doc.completion_date %}<li>Completed: {{ frappe.utils.formatdate(doc.completion_date) }}</li>{% endif %}
 </ul>

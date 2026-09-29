@@ -50,7 +50,7 @@ def get_columns():
 		{"label": _("Recommendations"), "fieldname": "recommendations", "fieldtype": "Data", "width": 280},
 		{"label": _("Actions Taken / Follow-up"), "fieldname": "follow_up", "fieldtype": "Data", "width": 240},
 		{"label": _("Client Response"), "fieldname": "client_response", "fieldtype": "Data", "width": 240},
-		{"label": _("Responsible"), "fieldname": "responsible", "fieldtype": "Data", "width": 130},
+		{"label": _("Responsible Person"), "fieldname": "responsible", "fieldtype": "Data", "width": 150},
 		{"label": _("Due Date"), "fieldname": "due_date", "fieldtype": "Date", "width": 95},
 		{"label": _("Action Status"), "fieldname": "action_status", "fieldtype": "Data", "width": 110},
 		{"label": _("Completion Date"), "fieldname": "completion_date", "fieldtype": "Date", "width": 110},

@@ -24,7 +24,7 @@ frappe.pages["meus-achados"].on_page_load = function (wrapper) {
 frappe.pages["meus-achados"].on_page_show = function (wrapper) {
 	if (!wrapper.ma) return;
 	wrapper.ma.load_entries();
-	wrapper.ma.load_dashboard();
+	wrapper.ma.load_history();
 	if (wrapper.ma.table_rows) wrapper.ma.load_table_data();
 };
 
@@ -79,15 +79,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.severity_filter = "";
 		this.search_term = "";
 
-		// Dashboard tab: monitoring KPIs - deliberately a SEPARATE filter
-		// state, not tied to whatever the Findings tab happens to be
-		// filtered to.
-		this.dashboard_active_status = "all";
-		this.dashboard_severity_filter = "";
-		this.dashboard_area_filter = "";
-		this.dashboard_equipment_filter = "";
-		this.dashboard_date_from = "";
-		this.dashboard_date_to = "";
+		// Overview + Equipment tabs: drawn from one condition_history call.
+		this.history = null;
+		this.action_counts = { open: 0, overdue: 0 };
+		this.matrix_filter = "all";
+		this.matrix_area = "";
+		this.matrix_search = "";
 
 		this.table_rows = null;
 		this.table_sort = { field: "creation", dir: "desc" };
@@ -105,15 +102,17 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	render_shell() {
 		this.$container = $('<div class="ma">').appendTo(this.page.body);
 		$(`<div class="ma-intro">${__(
-			"Findings logged during inspections carried out at your site. Click a finding to see the details and record your response."
+			"The condition of your equipment across every inspection: the overall picture, how each equipment is evolving month by month, and the findings that need your response."
 		)}</div>`).appendTo(this.$container);
 
 		this.render_tabs();
 
-		this.$tab_dashboard_content = $('<div class="ma-tab-content">').appendTo(this.$container);
+		this.$tab_overview_content = $('<div class="ma-tab-content">').appendTo(this.$container);
+		this.$tab_equipment_content = $('<div class="ma-tab-content">').appendTo(this.$container).hide();
 		this.$tab_findings_content = $('<div class="ma-tab-content">').appendTo(this.$container).hide();
 
-		this.render_dashboard_shell(this.$tab_dashboard_content);
+		this.render_overview_shell(this.$tab_overview_content);
+		this.render_matrix_shell(this.$tab_equipment_content);
 
 		this.render_findings_filters(this.$tab_findings_content);
 		this.render_view_toggle(this.$tab_findings_content);
@@ -132,6 +131,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		// truth for initial visibility/active-state too, so there's no
 		// separate "default state" to keep in sync with the toggle logic.
 		this.switch_view("table");
+		this.switch_tab("overview");
+		this.load_history();
 	}
 
 	// ---- view toggle: cards / table -----------------------------------------
@@ -158,49 +159,397 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 	render_tabs() {
 		const $tabs = $('<div class="ma-tabs">').appendTo(this.$container);
-		this.$tab_dashboard = $(`<button class="ma-tab active">${__("Dashboard")}</button>`).appendTo($tabs);
-		this.$tab_findings = $(`<button class="ma-tab">${__("Findings")}</button>`).appendTo($tabs);
-		this.$tab_dashboard.on("click", () => this.switch_tab("dashboard"));
-		this.$tab_findings.on("click", () => this.switch_tab("findings"));
+		this.$tabs = {};
+		[
+			["overview", __("Overview")],
+			["equipment", __("Equipment")],
+			["findings", __("Findings")],
+		].forEach(([key, label]) => {
+			this.$tabs[key] = $(`<button class="ma-tab">${label}</button>`)
+				.appendTo($tabs)
+				.on("click", () => this.switch_tab(key));
+		});
 	}
 
 	switch_tab(tab) {
-		const is_dashboard = tab === "dashboard";
-		this.$tab_dashboard.toggleClass("active", is_dashboard);
-		this.$tab_findings.toggleClass("active", !is_dashboard);
-		this.$tab_dashboard_content.toggle(is_dashboard);
-		this.$tab_findings_content.toggle(!is_dashboard);
-		// frappe.Chart (used for the trend chart) can size itself to 0 if built
-		// while its container is display:none - rebuild on every return to this
-		// tab so it's always constructed while visible. The composition bars /
-		// rankings are plain CSS and don't have this problem, so this is cheap
-		// insurance, not a full page reload.
-		if (is_dashboard) this.load_dashboard();
+		this.tab = tab;
+		Object.entries(this.$tabs).forEach(([key, $tab]) => $tab.toggleClass("active", key === tab));
+		this.$tab_overview_content.toggle(tab === "overview");
+		this.$tab_equipment_content.toggle(tab === "equipment");
+		this.$tab_findings_content.toggle(tab === "findings");
+		// frappe.Chart sizes itself from its container and draws at 0 width
+		// while hidden - so the overview is (re)drawn whenever it is shown.
+		if (tab === "overview") this.render_overview();
+		if (tab === "equipment") this.render_matrix();
 	}
 
-	// ---- dashboard: stat tiles + charts -----------------------------------------
+	// ---- condition history (Overview + Equipment tabs) --------------------------
+	//
+	// One call (manutencao_preditiva.trend.condition_history) returns every
+	// equipment's severity per month; both tabs are drawn from it. Readings-
+	// only months (e.g. the previous month of an imported Word report) show
+	// as hollow cells: measured, not diagnosed.
 
-	render_dashboard_shell($parent) {
-		this.$dashboard = $('<div class="ma-dashboard">').appendTo($parent);
-		this.render_dashboard_filters(this.$dashboard);
-		this.$dashboard_filter_note = $('<div class="ma-dashboard-filter-note">').appendTo(this.$dashboard);
-		this.$tiles = $('<div class="ma-tiles">').appendTo(this.$dashboard);
-
-		const $charts_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
-		this.$chart_severity = this.make_chart_card($charts_row, __("By Severity"));
-		this.$chart_status = this.make_chart_card($charts_row, __("By Action Status"));
-
-		const $rankings_row = $('<div class="ma-charts-row">').appendTo(this.$dashboard);
-		this.$rank_areas = this.make_chart_card($rankings_row, __("Areas with the Most Findings"));
-		this.$rank_equipment = this.make_chart_card($rankings_row, __("Equipment with the Most Findings"));
-
-		// Full-width and stacked, not side-by-side: 7 columns (label + 5
-		// severities + total) don't fit comfortably in a half-width card.
-		this.$crosstab_areas = this.make_chart_card(this.$dashboard, __("Area × Severity"));
-		this.$crosstab_equipment = this.make_chart_card(this.$dashboard, __("Equipment × Severity"));
-
-		this.$chart_trend = this.make_chart_card(this.$dashboard, __("Findings by Report (Inspection)"));
+	load_history() {
+		return Promise.all([
+			frappe.call({ method: "manutencao_preditiva.trend.condition_history" }),
+			frappe.call({
+				method: "frappe.client.get_count",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: [
+						["readings_only", "=", 0],
+						["action_status", "in", ["Open", "In Progress"]],
+						["severity", "not in", ["Normal", "Not Collected"]],
+					],
+				},
+			}),
+			frappe.call({
+				method: "frappe.client.get_count",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: [
+						["readings_only", "=", 0],
+						["due_date", "<", frappe.datetime.get_today()],
+						["action_status", "not in", ["Done", "Not Applicable"]],
+					],
+				},
+			}),
+		]).then(([history, open_actions, overdue]) => {
+			this.history = history.message || { periods: [], areas: {}, equipment: [] };
+			this.action_counts = { open: open_actions.message || 0, overdue: overdue.message || 0 };
+			this.render_area_filter_options();
+			if (this.tab === "overview") this.render_overview();
+			this.render_matrix();
+		});
 	}
+
+	area_name(code) {
+		return (this.history && this.history.areas[code]) || code || "";
+	}
+
+	// ---- Overview ---------------------------------------------------------------
+
+	render_overview_shell($parent) {
+		this.$tiles = $('<div class="ma-tiles">').appendTo($parent);
+		this.$chart_condition = this.make_chart_card($parent, __("Condition over time"));
+		this.$chart_condition
+			.closest(".ma-chart-card")
+			.find(".ma-chart-title")
+			.append(`<span class="ma-chart-sub">${__("equipment per severity, each inspection month")}</span>`);
+		this.$area_table = this.make_chart_card($parent, __("Areas - latest condition"));
+	}
+
+	render_overview() {
+		if (!this.history) return;
+		const rows = this.history.equipment;
+		const count = (fn) => rows.filter(fn).length;
+
+		this.$tiles.empty();
+		[
+			[__("Equipment monitored"), rows.length, "", null],
+			[__("Critical now"), count((r) => r.latest === "Critical"), "ma-tile-critical", "attention"],
+			[__("Alarm now"), count((r) => r.latest === "Alarm"), "ma-tile-warning", "attention"],
+			[__("Worsened"), count((r) => r.change === "worse"), "ma-tile-critical", "worse"],
+			[__("Improved"), count((r) => r.change === "better"), "ma-tile-good", "better"],
+			[__("Open actions"), this.action_counts.open, "ma-tile-warning", "findings"],
+		].forEach(([label, value, cls, target]) => {
+			const $tile = $(
+				`<div class="ma-tile ${cls}"><div class="ma-tile-value">${value}</div><div class="ma-tile-label">${label}</div></div>`
+			).appendTo(this.$tiles);
+			if (!target) return;
+			$tile.addClass("ma-tile-link").on("click", () => {
+				if (target === "findings") return this.switch_tab("findings");
+				this.set_matrix_filter(target);
+				this.switch_tab("equipment");
+			});
+		});
+		if (this.action_counts.overdue) {
+			$(`<div class="ma-tile-note">${__("{0} overdue", [this.action_counts.overdue])}</div>`).appendTo(
+				this.$tiles.find(".ma-tile").last()
+			);
+		}
+
+		this.render_condition_chart();
+		this.render_area_table();
+	}
+
+	render_condition_chart() {
+		this.$chart_condition.empty();
+		const severities = ["Normal", "Acceptable", "Alarm", "Critical"];
+		const periods = this.history.periods.filter((p) =>
+			this.history.equipment.some((r) => r.cells[p.key] && r.cells[p.key].severity)
+		);
+		if (!periods.length) return this.render_empty_chart(this.$chart_condition);
+
+		const datasets = severities.map((sev) => ({
+			name: __(sev),
+			chartType: "bar",
+			values: periods.map(
+				(p) => this.history.equipment.filter((r) => r.cells[p.key] && r.cells[p.key].severity === sev).length
+			),
+		}));
+		new frappe.Chart(this.$chart_condition[0], {
+			type: "bar",
+			height: 240,
+			data: { labels: periods.map((p) => p.label), datasets },
+			colors: severities.map((s) => MA_SEVERITY_HEX[s]),
+			barOptions: { stacked: 1, spaceRatio: 0.5 },
+			axisOptions: { xIsSeries: 1 },
+		});
+		if (periods.length === 1) {
+			$(`<div class="ma-chart-hint">${__(
+				"One diagnosed month so far - each new inspection adds a bar, so the plant's evolution builds up here."
+			)}</div>`).appendTo(this.$chart_condition);
+		}
+	}
+
+	render_area_table() {
+		this.$area_table.empty();
+		const by_area = new Map();
+		this.history.equipment.forEach((r) => {
+			if (!by_area.has(r.area)) by_area.set(r.area, []);
+			by_area.get(r.area).push(r);
+		});
+		if (!by_area.size) return this.render_empty_chart(this.$area_table);
+
+		const $table = $(`<table class="ma-area-table"><thead><tr>
+			<th>${__("Area")}</th><th class="ma-num">${__("Equipment")}</th><th>${__("Latest condition")}</th>
+			<th class="ma-num">${__("Alarm / Critical")}</th><th class="ma-num">${__("Worsened")}</th>
+		</tr></thead><tbody></tbody></table>`).appendTo(this.$area_table);
+		const $tbody = $table.find("tbody");
+
+		[...by_area.entries()]
+			.sort((a, b) => this.area_name(a[0]).localeCompare(this.area_name(b[0])))
+			.forEach(([area, rows]) => {
+				const attention = rows.filter((r) => ["Alarm", "Critical"].includes(r.latest)).length;
+				const worse = rows.filter((r) => r.change === "worse").length;
+				const $tr = $("<tr>").appendTo($tbody);
+				$("<td>").text(this.area_name(area)).appendTo($tr);
+				$('<td class="ma-num">').text(rows.length).appendTo($tr);
+				const $bar = $('<div class="ma-mini-bar">').appendTo($("<td>").appendTo($tr));
+				["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"].forEach((sev) => {
+					const n = rows.filter((r) => r.latest === sev).length;
+					if (!n) return;
+					$('<div class="ma-mini-seg">')
+						.css({ width: `${(n / rows.length) * 100}%`, background: MA_SEVERITY_HEX[sev] })
+						.attr("title", `${__(sev)}: ${n}`)
+						.appendTo($bar);
+				});
+				$('<td class="ma-num">').html(attention ? `<b style="color:${MA_SEVERITY_HEX.Alarm}">${attention}</b>` : "0").appendTo($tr);
+				$('<td class="ma-num">').html(worse ? `<b style="color:${MA_SEVERITY_HEX.Critical}">▲ ${worse}</b>` : "0").appendTo($tr);
+				$tr.on("click", () => {
+					this.matrix_area = area;
+					this.$matrix_area.val(area);
+					this.switch_tab("equipment");
+				});
+			});
+	}
+
+	// ---- Equipment: the evolution matrix ------------------------------------------
+
+	render_matrix_shell($parent) {
+		$(`<div class="ma-tab-intro">${__(
+			"Each row is one equipment, each column an inspection month - see at a glance what is getting worse, what improved after an intervention, and what has been stable. Click an equipment for its full history and readings trend."
+		)}</div>`).appendTo($parent);
+
+		const $bar = $('<div class="ma-shared-filters">').appendTo($parent);
+		this.$matrix_search = $(`<input type="search" class="ma-search" placeholder="${__("Search equipment…")}">`)
+			.appendTo($bar)
+			.on("input", () => {
+				this.matrix_search = (this.$matrix_search.val() || "").toLowerCase().trim();
+				this.render_matrix();
+			});
+		this.$matrix_area = $('<select class="ma-select">').appendTo($bar);
+		this.$matrix_area.on("change", () => {
+			this.matrix_area = this.$matrix_area.val();
+			this.render_matrix();
+		});
+		this.$matrix_chips = $('<div class="ma-chips">').appendTo($bar);
+		[
+			["all", __("All")],
+			["attention", __("Alarm / Critical now")],
+			["worse", __("Worsened")],
+			["better", __("Improved")],
+		].forEach(([key, label]) => {
+			$(`<button class="ma-chip" data-key="${key}">${label}</button>`)
+				.appendTo(this.$matrix_chips)
+				.on("click", () => {
+					this.set_matrix_filter(key);
+					this.render_matrix();
+				});
+		});
+		this.set_matrix_filter("all");
+
+		const $legend = $('<div class="ma-mx-legend">').appendTo($parent);
+		["Critical", "Alarm", "Acceptable", "Normal", "Not Collected"].forEach((sev) => {
+			$(`<span><span class="ma-mx-cell" style="background:${MA_SEVERITY_HEX[sev]}"></span>${__(sev)}</span>`).appendTo($legend);
+		});
+		$(`<span><span class="ma-mx-cell ma-mx-readings"></span>${__("Readings only")}</span>`).appendTo($legend);
+
+		this.$matrix_wrap = $('<div class="ma-mx-wrap">').appendTo($parent);
+	}
+
+	set_matrix_filter(key) {
+		this.matrix_filter = key;
+		this.$matrix_chips.find(".ma-chip").each((_i, el) => $(el).toggleClass("active", $(el).data("key") === key));
+	}
+
+	render_area_filter_options() {
+		const current = this.matrix_area || "";
+		this.$matrix_area.empty();
+		$(`<option value="">${__("All areas")}</option>`).appendTo(this.$matrix_area);
+		Object.entries(this.history.areas)
+			.sort((a, b) => a[1].localeCompare(b[1]))
+			.forEach(([code, name]) => $("<option>").val(code).text(name).appendTo(this.$matrix_area));
+		this.$matrix_area.val(current);
+	}
+
+	get_matrix_rows() {
+		return this.history.equipment.filter((r) => {
+			if (this.matrix_area && r.area !== this.matrix_area) return false;
+			if (this.matrix_filter === "attention" && !["Alarm", "Critical"].includes(r.latest)) return false;
+			if (this.matrix_filter === "worse" && r.change !== "worse") return false;
+			if (this.matrix_filter === "better" && r.change !== "better") return false;
+			if (this.matrix_search && !`${r.description} ${r.equipment}`.toLowerCase().includes(this.matrix_search)) return false;
+			return true;
+		});
+	}
+
+	render_matrix() {
+		if (!this.history || !this.$matrix_wrap) return;
+		this.$matrix_wrap.empty();
+		const periods = this.history.periods;
+		const rows = this.get_matrix_rows();
+		if (!rows.length) {
+			$(`<div class="ma-empty">${
+				this.history.equipment.length ? __("No equipment matches.") : __("No inspections yet.")
+			}</div>`).appendTo(this.$matrix_wrap);
+			return;
+		}
+
+		const esc = frappe.utils.escape_html;
+		const trend = {
+			worse: `<span class="ma-mx-trend worse" title="${__("Worse than the previous inspection")}">▲ ${__("Worse")}</span>`,
+			better: `<span class="ma-mx-trend better" title="${__("Better than the previous inspection")}">▼ ${__("Better")}</span>`,
+			same: `<span class="ma-mx-trend same">● ${__("Stable")}</span>`,
+		};
+
+		let html = `<table class="ma-mx"><thead><tr><th class="ma-mx-eq">${__("Equipment")}</th>`;
+		periods.forEach((p) => (html += `<th class="ma-mx-period">${esc(p.label)}</th>`));
+		html += `<th class="ma-mx-trend-col">${__("Trend")}</th></tr></thead><tbody>`;
+
+		let current_area = null;
+		rows.forEach((r, index) => {
+			if (r.area !== current_area) {
+				current_area = r.area;
+				const n = rows.filter((x) => x.area === r.area).length;
+				html += `<tr class="ma-mx-group"><td colspan="${periods.length + 2}">${esc(this.area_name(r.area))}
+					<span class="ma-mx-group-count">${n}</span></td></tr>`;
+			}
+			html += `<tr data-index="${index}"><td class="ma-mx-eq"><a href="#" class="ma-mx-eq-link">${esc(
+				r.description || r.equipment
+			)}</a></td>`;
+			periods.forEach((p) => {
+				const c = r.cells[p.key];
+				if (!c) {
+					html += `<td class="ma-mx-td"><span class="ma-mx-none">·</span></td>`;
+				} else if (!c.severity) {
+					html += `<td class="ma-mx-td"><span class="ma-mx-cell ma-mx-readings" data-sheet="${esc(c.sheet)}"
+						data-readings="1" title="${esc(p.label)} · ${__("readings only")}"></span></td>`;
+				} else {
+					html += `<td class="ma-mx-td"><span class="ma-mx-cell" data-sheet="${esc(c.sheet)}"
+						style="background:${MA_SEVERITY_HEX[c.severity] || "#8a94a0"}"
+						title="${esc(p.label)} · ${esc(__(c.severity))}"></span></td>`;
+				}
+			});
+			html += `<td class="ma-mx-trend-col">${trend[r.change] || ""}</td></tr>`;
+		});
+		html += "</tbody></table>";
+
+		const $table = $(html).appendTo(this.$matrix_wrap);
+		$table.on("click", ".ma-mx-eq-link", (e) => {
+			e.preventDefault();
+			this.open_equipment_dialog(rows[$(e.currentTarget).closest("tr").data("index")]);
+		});
+		$table.on("click", ".ma-mx-cell", (e) => {
+			const $cell = $(e.currentTarget);
+			const row = rows[$cell.closest("tr").data("index")];
+			if ($cell.data("readings")) return this.open_equipment_dialog(row);
+			this.open_finding_dialog({ data: { name: $cell.data("sheet") } });
+		});
+	}
+
+	// ---- one equipment: timeline + readings trend + history ---------------------
+
+	open_equipment_dialog(row) {
+		const dialog = new frappe.ui.Dialog({
+			title: row.description || row.equipment,
+			size: "large",
+			fields: [
+				{ fieldtype: "HTML", fieldname: "timeline" },
+				{ fieldtype: "Section Break", label: __("Readings trend") },
+				{ fieldtype: "HTML", fieldname: "trend" },
+				{ fieldtype: "Section Break", label: __("History") },
+				{ fieldtype: "HTML", fieldname: "history" },
+			],
+		});
+
+		const esc = frappe.utils.escape_html;
+		let timeline = `<div class="ma-eq-meta">${esc(this.area_name(row.area))}</div><div class="ma-eq-timeline">`;
+		this.history.periods.forEach((p) => {
+			const c = row.cells[p.key];
+			const sev = c && c.severity;
+			timeline += `<div class="ma-eq-step">
+				<span class="ma-mx-cell ${c && !sev ? "ma-mx-readings" : ""}" style="${sev ? `background:${MA_SEVERITY_HEX[sev]}` : ""}"></span>
+				<div class="ma-eq-step-label">${esc(p.label)}</div>
+				<div class="ma-eq-step-sev">${c ? esc(sev ? __(sev) : __("readings")) : "—"}</div>
+			</div>`;
+		});
+		timeline += "</div>";
+		dialog.fields_dict.timeline.$wrapper.html(timeline);
+		dialog.fields_dict.history.$wrapper.html(`<div class="ma-empty">${__("Loading…")}</div>`);
+		dialog.show();
+
+		manutencao_preditiva.render_equipment_trend(dialog.fields_dict.trend.$wrapper, row.equipment);
+
+		frappe
+			.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Equipment Inspection",
+					filters: { equipment: row.equipment, readings_only: 0 },
+					fields: ["name", "report_date", "severity", "defects", "recommendations", "action_status"],
+					order_by: "report_date desc",
+					limit_page_length: 24,
+				},
+			})
+			.then((r) => {
+				const sheets = r.message || [];
+				const $wrap = dialog.fields_dict.history.$wrapper.empty();
+				if (!sheets.length) {
+					$(`<div class="ma-empty">${__("No diagnosed inspections yet.")}</div>`).appendTo($wrap);
+					return;
+				}
+				sheets.forEach((s) => {
+					const $item = $(`<div class="ma-eq-history-item">
+						<div class="ma-eq-history-head">
+							<span class="ma-eq-history-date">${frappe.datetime.str_to_user(s.report_date)}</span>
+							${ma_badge(s.severity, MA_SEVERITY_HEX[s.severity])}
+							${s.action_status ? ma_badge(s.action_status, MA_STATUS_HEX[s.action_status]) : ""}
+						</div>
+						${s.defects ? `<div><b>${__("Defects")}:</b> ${esc(s.defects)}</div>` : ""}
+						${s.recommendations ? `<div><b>${__("Recommendations")}:</b> ${esc(s.recommendations)}</div>` : ""}
+					</div>`).appendTo($wrap);
+					$item.on("click", () => {
+						dialog.hide();
+						this.open_finding_dialog({ data: { name: s.name } });
+					});
+				});
+			});
+	}
+
+	// ---- shared bits ------------------------------------------------------------
 
 	make_chart_card(container, title) {
 		const $card = $('<div class="ma-chart-card">').appendTo(container);
@@ -208,437 +557,17 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		return $('<div class="ma-chart-body">').appendTo($card);
 	}
 
-	// Drives the dashboard charts/rankings/crosstabs/trend (NOT the 4 stat
-	// tiles, which stay global - see load_dashboard). Deliberately its OWN
-	// filter state, separate from the Findings tab's - the Dashboard is for
-	// monitoring KPIs, Findings is for finding/editing a record, and they
-	// don't need to stay in lockstep. Dates filter by report_date (when the
-	// reading was taken), not creation (when the sheet was typed up).
-	// Every query here leaves out readings-only sheets (history kept just for
-	// the trend, e.g. the previous month of an imported Word report) - they
-	// are not findings and have no action to follow up. The trend in the
-	// finding dialog still shows them (manutencao_preditiva.trend).
-	get_dashboard_base_filters() {
-		const filters = { readings_only: 0 };
-		if (this.dashboard_severity_filter) filters.severity = this.dashboard_severity_filter;
-		if (this.dashboard_active_status !== "all") filters.action_status = this.dashboard_active_status;
-		if (this.dashboard_area_filter) filters.area = this.dashboard_area_filter;
-		if (this.dashboard_equipment_filter) filters.equipment = this.dashboard_equipment_filter;
-		if (this.dashboard_date_from && this.dashboard_date_to) {
-			filters.report_date = ["between", [this.dashboard_date_from, this.dashboard_date_to]];
-		} else if (this.dashboard_date_from) {
-			filters.report_date = [">=", this.dashboard_date_from];
-		} else if (this.dashboard_date_to) {
-			filters.report_date = ["<=", this.dashboard_date_to];
-		}
-		return filters;
+	render_empty_chart($body) {
+		$body.html(`<div class="ma-empty">${__("No data")}</div>`);
 	}
 
-	// List form of the same filters, for the 4 stat tiles specifically: each
-	// tile also has its OWN hardcoded condition (e.g. "Critical" always
-	// requires severity=Critical), and a plain filters *object* can only
-	// hold one value per fieldname - merging two conditions on the same
-	// field would silently overwrite one of them. A filters *list* allows
-	// multiple conditions on the same field, so they correctly AND together
-	// instead (e.g. "Open" while dashboard_active_status="Done" correctly
-	// shows 0 - the two conditions are genuinely contradictory, which is
-	// the right answer once you've explicitly picked that filter).
-	get_dashboard_base_filters_list() {
-		const filters = [["readings_only", "=", 0]];
-		if (this.dashboard_severity_filter) filters.push(["severity", "=", this.dashboard_severity_filter]);
-		if (this.dashboard_active_status !== "all") filters.push(["action_status", "=", this.dashboard_active_status]);
-		if (this.dashboard_area_filter) filters.push(["area", "=", this.dashboard_area_filter]);
-		if (this.dashboard_equipment_filter) filters.push(["equipment", "=", this.dashboard_equipment_filter]);
-		if (this.dashboard_date_from) filters.push(["report_date", ">=", this.dashboard_date_from]);
-		if (this.dashboard_date_to) filters.push(["report_date", "<=", this.dashboard_date_to]);
-		return filters;
-	}
-
-	// Drives the card list + table fetch (Findings tab).
+	// Drives the card list + table fetch (Findings tab). Readings-only sheets
+	// (history kept for the trend) are never findings - no action to follow.
 	get_findings_filters() {
 		const filters = { readings_only: 0 };
 		if (this.severity_filter) filters.severity = this.severity_filter;
 		if (this.active_status !== "all") filters.action_status = this.active_status;
 		return filters;
-	}
-
-	render_dashboard_filter_note() {
-		const base = this.get_dashboard_base_filters();
-		const parts = [];
-		if (base.severity) parts.push(`${__("Severity")}: <b>${frappe.utils.escape_html(base.severity)}</b>`);
-		if (base.action_status) parts.push(`${__("Status")}: <b>${frappe.utils.escape_html(base.action_status)}</b>`);
-		if (this.dashboard_date_from || this.dashboard_date_to) {
-			const from = this.dashboard_date_from ? frappe.datetime.str_to_user(this.dashboard_date_from) : "…";
-			const to = this.dashboard_date_to ? frappe.datetime.str_to_user(this.dashboard_date_to) : "…";
-			parts.push(`${__("Period")}: <b>${from} – ${to}</b>`);
-		}
-
-		if (!parts.length && !this.dashboard_area_filter && !this.dashboard_equipment_filter) {
-			this.$dashboard_filter_note.html(`<span>${__("Showing: all findings")}</span>`);
-			return;
-		}
-
-		this.$dashboard_filter_note.html(
-			`${__("Filtered by")}: <span class="ma-filter-note-parts">${parts.join(" · ")}</span>`
-		);
-		const $parts = this.$dashboard_filter_note.find(".ma-filter-note-parts");
-
-		const add_async_part = (label, code, resolver) => {
-			if ($parts.text().trim()) $parts.append(" · ");
-			$parts.append(`${label}: `);
-			resolver.call(this, code, $("<b>").appendTo($parts));
-		};
-
-		if (this.dashboard_area_filter) add_async_part(__("Area"), this.dashboard_area_filter, this.resolve_area_label);
-		if (this.dashboard_equipment_filter) {
-			add_async_part(__("Equipment"), this.dashboard_equipment_filter, this.resolve_equipment_label);
-		}
-	}
-
-	// Both resolvers fetch the link's display title and drop it into $el once
-	// it arrives - the filter note renders synchronously first (showing the
-	// raw code) so the UI never blocks on these two extra round-trips.
-	resolve_area_label(code, $el) {
-		$el.text(code);
-		this._area_label_cache = this._area_label_cache || {};
-		if (this._area_label_cache[code]) {
-			$el.text(this._area_label_cache[code]);
-			return;
-		}
-		frappe.db.get_value("Area", code, "area_name").then((r) => {
-			const label = (r.message && r.message.area_name) || code;
-			this._area_label_cache[code] = label;
-			$el.text(label);
-		});
-	}
-
-	resolve_equipment_label(code, $el) {
-		$el.text(code);
-		this._equipment_label_cache = this._equipment_label_cache || {};
-		if (this._equipment_label_cache[code]) {
-			$el.text(this._equipment_label_cache[code]);
-			return;
-		}
-		frappe.db.get_value("Equipment", code, "description").then((r) => {
-			const label = (r.message && r.message.description) || code;
-			this._equipment_label_cache[code] = label;
-			$el.text(label);
-		});
-	}
-
-	load_dashboard() {
-		this.render_dashboard_filter_note();
-		const base = this.get_dashboard_base_filters();
-		const base_list = this.get_dashboard_base_filters_list();
-
-		Promise.all([
-			// The 4 stat tiles respect the Dashboard filters too (combined via a
-			// filters LIST, not a plain object - see get_dashboard_base_filters_list
-			// for why that matters once a tile's own hardcoded condition and a
-			// user-picked filter could land on the same field).
-			frappe.call({ method: "frappe.client.get_count", args: { doctype: "Equipment Inspection", filters: base_list } }),
-			frappe.call({
-				method: "frappe.client.get_count",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: [...base_list, ["action_status", "in", ["Open", "In Progress"]]],
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_count",
-				args: { doctype: "Equipment Inspection", filters: [...base_list, ["severity", "=", "Critical"]] },
-			}),
-			frappe.call({
-				method: "frappe.client.get_count",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: [
-						...base_list,
-						["due_date", "<", frappe.datetime.get_today()],
-						["action_status", "not in", ["Done", "Not Applicable"]],
-					],
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: ["severity", "count(name) as total"],
-					group_by: "severity",
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: ["action_status", "count(name) as total"],
-					group_by: "action_status",
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: ["report", "count(name) as total"],
-					group_by: "report",
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Inspection Report",
-					fields: ["name", "report_date", "period_label"],
-					order_by: "report_date asc",
-					limit_page_length: 0,
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: [
-						"area",
-						"area.area_name as area_name",
-						"count(`tabEquipment Inspection`.name) as total",
-					],
-					group_by: "area",
-					order_by: "total desc",
-					limit_page_length: 5,
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: ["equipment", "equipment_description", "count(name) as total"],
-					group_by: "equipment",
-					order_by: "total desc",
-					limit_page_length: 5,
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: [
-						"area",
-						"area.area_name as area_name",
-						"severity",
-						"count(`tabEquipment Inspection`.name) as total",
-					],
-					group_by: "area, severity",
-					// Without this, Frappe's implicit default order (the doctype's own
-					// sort_field) is just as ambiguous once area.area_name joins in
-					// tabArea - see load_entries()/load_table_data() above for the
-					// same problem with an explicit order_by. The rows are re-pivoted
-					// client-side anyway, so row order from the query doesn't matter.
-					order_by: "",
-				},
-			}),
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Equipment Inspection",
-					filters: base,
-					fields: ["equipment", "equipment_description", "severity", "count(name) as total"],
-					group_by: "equipment, severity",
-				},
-			}),
-		]).then((results) => {
-			const [
-				total,
-				open_count,
-				critical,
-				overdue,
-				by_severity,
-				by_status,
-				by_report,
-				reports,
-				top_areas,
-				top_equipment,
-				crosstab_areas,
-				crosstab_equipment,
-			] = results.map((r) => r.message);
-			this.render_stat_tiles({
-				total: total || 0,
-				open: open_count || 0,
-				critical: critical || 0,
-				overdue: overdue || 0,
-			});
-			this.render_severity_chart(by_severity || []);
-			this.render_status_chart(by_status || []);
-			this.render_ranking(this.$rank_areas, top_areas || [], "area_name", "area");
-			this.render_ranking(this.$rank_equipment, top_equipment || [], "equipment_description", "equipment");
-			this.render_crosstab(this.$crosstab_areas, crosstab_areas || [], "area_name", "area");
-			this.render_crosstab(this.$crosstab_equipment, crosstab_equipment || [], "equipment_description", "equipment");
-			this.render_trend_chart(by_report || [], reports || []);
-		});
-	}
-
-	render_stat_tiles(stats) {
-		this.$tiles.empty();
-		const tiles = [
-			[__("Total Findings"), stats.total, ""],
-			[__("Open"), stats.open, "ma-tile-warning"],
-			[__("Critical"), stats.critical, "ma-tile-critical"],
-			[__("Overdue"), stats.overdue, "ma-tile-critical"],
-		];
-		tiles.forEach(([label, value, cls]) => {
-			$(`<div class="ma-tile ${cls}"><div class="ma-tile-value">${value}</div><div class="ma-tile-label">${label}</div></div>`).appendTo(
-				this.$tiles
-			);
-		});
-	}
-
-	render_empty_chart($body) {
-		$body.html(`<div class="ma-empty">${__("No data")}</div>`);
-	}
-
-	// Hand-built composition bar instead of frappe.Chart's "percentage" type -
-	// gives full control over spacing/typography and shows the percentage
-	// alongside the count, matching the rest of the page's design language
-	// rather than the chart library's default look.
-	render_severity_chart(rows) {
-		const items = [];
-		MA_SEVERITY_OPTIONS.forEach((sev) => {
-			const row = rows.find((r) => r.severity === sev);
-			if (row && row.total) items.push({ label: sev, value: row.total, color: MA_SEVERITY_HEX[sev] });
-		});
-		this.render_comp_bar(this.$chart_severity, items);
-	}
-
-	render_status_chart(rows) {
-		const items = [];
-		MA_STATUS_OPTIONS.forEach((status) => {
-			const row = rows.find((r) => r.action_status === status);
-			if (row && row.total) items.push({ label: status, value: row.total, color: MA_STATUS_HEX[status] });
-		});
-		this.render_comp_bar(this.$chart_status, items);
-	}
-
-	render_comp_bar($body, items) {
-		$body.empty();
-		if (!items.length) return this.render_empty_chart($body);
-
-		const total = items.reduce((sum, i) => sum + i.value, 0);
-		const $bar = $('<div class="ma-comp-bar">').appendTo($body);
-		items.forEach((item) => {
-			const pct = (item.value / total) * 100;
-			$(`<div class="ma-comp-seg" style="width:${pct}%;background:${item.color}">`)
-				.attr("title", `${item.label}: ${item.value} (${pct.toFixed(0)}%)`)
-				.appendTo($bar);
-		});
-
-		const $legend = $('<div class="ma-comp-legend">').appendTo($body);
-		items.forEach((item) => {
-			const pct = ((item.value / total) * 100).toFixed(0);
-			const $row = $('<div class="ma-comp-legend-item">').appendTo($legend);
-			$('<span class="ma-comp-dot">').css("background", item.color).appendTo($row);
-			$('<span class="ma-comp-legend-label">').text(item.label).appendTo($row);
-			$('<span class="ma-comp-legend-value">').text(`${item.value} · ${pct}%`).appendTo($row);
-		});
-	}
-
-	render_ranking($body, rows, name_field, code_field) {
-		$body.empty();
-		if (!rows.length) return this.render_empty_chart($body);
-
-		const max = Math.max(...rows.map((r) => r.total));
-		rows.forEach((row) => {
-			const label = row[name_field] || row[code_field] || "";
-			const pct = max ? (row.total / max) * 100 : 0;
-			const $row = $('<div class="ma-rank-row">').appendTo($body);
-			$('<div class="ma-rank-label">').attr("title", label).text(label).appendTo($row);
-			const $wrap = $('<div class="ma-rank-bar-wrap">').appendTo($row);
-			$('<div class="ma-rank-bar">').css("width", pct + "%").appendTo($wrap);
-			$('<div class="ma-rank-value">').text(row.total).appendTo($row);
-		});
-	}
-
-	// rows: one row per (dimension, severity) combination with its count,
-	// e.g. [{area, area_name, severity, total}, ...]. Pivots into a
-	// dimension × severity grid, limited to the top 8 dimension values by
-	// total count so the table stays readable.
-	render_crosstab($body, rows, name_field, code_field) {
-		$body.empty();
-		if (!rows.length) return this.render_empty_chart($body);
-
-		const totals_by_dim = {};
-		const label_by_dim = {};
-		const matrix = {};
-		rows.forEach((row) => {
-			const key = row[code_field];
-			totals_by_dim[key] = (totals_by_dim[key] || 0) + row.total;
-			label_by_dim[key] = row[name_field] || key;
-			matrix[key] = matrix[key] || {};
-			matrix[key][row.severity] = row.total;
-		});
-
-		const top_dims = Object.keys(totals_by_dim)
-			.sort((a, b) => totals_by_dim[b] - totals_by_dim[a])
-			.slice(0, 8);
-
-		const $scroll = $('<div class="ma-crosstab-scroll">').appendTo($body);
-		const $table = $('<table class="ma-crosstab">').appendTo($scroll);
-		const $thead_row = $("<tr>").appendTo($("<thead>").appendTo($table));
-		$("<th>").appendTo($thead_row);
-		MA_SEVERITY_OPTIONS.forEach((sev) => $("<th>").text(sev).appendTo($thead_row));
-		$("<th>").text(__("Total")).appendTo($thead_row);
-
-		const $tbody = $("<tbody>").appendTo($table);
-		top_dims.forEach((dim) => {
-			const $row = $("<tr>").appendTo($tbody);
-			$("<td>").addClass("ma-crosstab-label").attr("title", label_by_dim[dim]).text(label_by_dim[dim]).appendTo($row);
-			MA_SEVERITY_OPTIONS.forEach((sev) => {
-				const count = (matrix[dim] && matrix[dim][sev]) || 0;
-				const $cell = $("<td>").addClass("ma-crosstab-cell").text(count || "–").appendTo($row);
-				if (count) {
-					$cell.css({
-						background: hex_to_rgba(MA_SEVERITY_HEX[sev], 0.14),
-						color: MA_SEVERITY_HEX[sev],
-						"font-weight": 700,
-					});
-				}
-			});
-			$("<td>").addClass("ma-crosstab-total").text(totals_by_dim[dim]).appendTo($row);
-		});
-
-		if (Object.keys(totals_by_dim).length > 8) {
-			$(`<div class="ma-crosstab-note">${__("Showing the top 8 of {0}.", [Object.keys(totals_by_dim).length])}</div>`).appendTo(
-				$body
-			);
-		}
-	}
-
-	render_trend_chart(report_counts, reports) {
-		this.$chart_trend.empty();
-		const counts_by_name = {};
-		report_counts.forEach((r) => {
-			counts_by_name[r.report] = r.total;
-		});
-
-		const labels = [];
-		const values = [];
-		reports.forEach((r) => {
-			if (!counts_by_name[r.name]) return;
-			labels.push(r.period_label || (r.report_date ? frappe.datetime.str_to_user(r.report_date) : r.name));
-			values.push(counts_by_name[r.name]);
-		});
-
-		if (!labels.length) return this.render_empty_chart(this.$chart_trend);
-		new frappe.Chart(this.$chart_trend[0], {
-			data: { labels, datasets: [{ name: __("Findings"), values }] },
-			type: "bar",
-			height: 200,
-			colors: ["#14877e"],
-			valuesOverPoints: 1,
-		});
 	}
 
 	// ---- filters --------------------------------------------------------------
@@ -679,112 +608,6 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		if (this.table_rows) this.load_table_data();
 	}
 
-	// Dashboard tab: its own Severity + Status, driving only the dashboard.
-	render_dashboard_filters($parent) {
-		const $outer = $('<div class="ma-shared-filters ma-shared-filters-stacked">').appendTo($parent);
-		const $row1 = $('<div class="ma-shared-filters-row">').appendTo($outer);
-		const $row2 = $('<div class="ma-shared-filters-row">').appendTo($outer);
-
-		this.$dashboard_severity_select = $('<select class="ma-select">').appendTo($row1);
-		$(`<option value="">${__("All severities")}</option>`).appendTo(this.$dashboard_severity_select);
-		MA_SEVERITY_OPTIONS.forEach((s) => $(`<option value="${s}">${s}</option>`).appendTo(this.$dashboard_severity_select));
-		this.$dashboard_severity_select.on("change", () => {
-			this.dashboard_severity_filter = this.$dashboard_severity_select.val();
-			this.load_dashboard();
-		});
-
-		this.$dashboard_chips = $('<div class="ma-chips">').appendTo($row1);
-		const chip_defs = [["all", __("All")]].concat(MA_STATUS_OPTIONS.map((s) => [s, s]));
-		chip_defs.forEach(([key, label]) => {
-			const $chip = $(`<button class="ma-chip" data-key="${frappe.utils.escape_html(key)}">${label}</button>`).appendTo(
-				this.$dashboard_chips
-			);
-			if (key === "all") $chip.addClass("active");
-			$chip.on("click", () => {
-				this.dashboard_active_status = key;
-				this.$dashboard_chips.find(".ma-chip").removeClass("active");
-				$chip.addClass("active");
-				this.load_dashboard();
-			});
-		});
-
-		const $clear_btn = $(`<button class="ma-btn">${__("Clear Filters")}</button>`).appendTo($row1);
-		$clear_btn.on("click", () => this.clear_dashboard_filters());
-
-		const $area_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
-		this.dashboard_area_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Link",
-				fieldname: "dashboard_area",
-				label: __("Area"),
-				options: "Area",
-				onchange: () => {
-					this.dashboard_area_filter = this.dashboard_area_control.get_value();
-					this.load_dashboard();
-				},
-			},
-			parent: $area_wrap[0],
-			render_input: true,
-		});
-		this.dashboard_area_control.refresh();
-
-		const $equip_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
-		this.dashboard_equipment_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Link",
-				fieldname: "dashboard_equipment",
-				label: __("Equipment"),
-				options: "Equipment",
-				onchange: () => {
-					this.dashboard_equipment_filter = this.dashboard_equipment_control.get_value();
-					this.load_dashboard();
-				},
-			},
-			parent: $equip_wrap[0],
-			render_input: true,
-		});
-		this.dashboard_equipment_control.refresh();
-
-		const $date_from_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
-		$('<label class="ma-painel-filter-label">').text(__("From")).appendTo($date_from_wrap);
-		this.$dashboard_date_from = $('<input type="date" class="ma-select">').appendTo($date_from_wrap);
-		this.$dashboard_date_from.on("change", () => {
-			this.dashboard_date_from = this.$dashboard_date_from.val();
-			this.load_dashboard();
-		});
-
-		const $date_to_wrap = $('<div class="ma-painel-filter-field">').appendTo($row2);
-		$('<label class="ma-painel-filter-label">').text(__("To")).appendTo($date_to_wrap);
-		this.$dashboard_date_to = $('<input type="date" class="ma-select">').appendTo($date_to_wrap);
-		this.$dashboard_date_to.on("change", () => {
-			this.dashboard_date_to = this.$dashboard_date_to.val();
-			this.load_dashboard();
-		});
-	}
-
-	clear_dashboard_filters() {
-		this.dashboard_severity_filter = "";
-		this.dashboard_active_status = "all";
-		this.dashboard_area_filter = "";
-		this.dashboard_equipment_filter = "";
-		this.dashboard_date_from = "";
-		this.dashboard_date_to = "";
-
-		this.$dashboard_severity_select.val("");
-		this.$dashboard_chips.find(".ma-chip").removeClass("active");
-		this.$dashboard_chips.find('[data-key="all"]').addClass("active");
-		this.dashboard_area_control.set_value("");
-		this.dashboard_equipment_control.set_value("");
-		this.$dashboard_date_from.val("");
-		this.$dashboard_date_to.val("");
-
-		this.load_dashboard();
-	}
-
-	// Card-view-only: free-text, client-side narrowing of whatever's already
-	// loaded. Not a server filter, so (like before) it doesn't affect the
-	// table or the dashboard - there's no single field to aggregate a
-	// substring match by.
 	render_filters($parent) {
 		const $bar = $('<div class="ma-filters">').appendTo($parent);
 
@@ -945,7 +768,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 	get_table_columns() {
 		// Severity/Status are no longer filterable per-column here - they're
 		// server-side filters now, controlled by the shared bar above the
-		// Cards/Table toggle (so they also drive the card list + dashboard).
+		// Cards/Table toggle (so they also drive the card list).
 		// Still sortable, since sorting the already-fetched rows is unrelated.
 		return [
 			{ field: "severity", label: __("Severity"), sortable: true },
@@ -1221,7 +1044,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				{ fieldtype: "Section Break", label: __("Your Response") },
 				{ fieldtype: "Small Text", fieldname: "client_response", label: __("Action Taken / Response") },
 				{ fieldtype: "Column Break" },
-				{ fieldtype: "Data", fieldname: "responsible", label: __("Responsible") },
+				{ fieldtype: "Data", fieldname: "responsible", label: __("Responsible Person") },
 				{ fieldtype: "Section Break" },
 				{ fieldtype: "Date", fieldname: "due_date", label: __("Due Date") },
 				{ fieldtype: "Column Break" },
@@ -1274,7 +1097,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 					$old_card.replaceWith(entry.$card);
 					this.render_summary_bar();
 				}
-				this.load_dashboard();
+				this.load_history();
 				if (this.table_rows) this.load_table_data();
 			})
 			.always(() => {

@@ -5,7 +5,8 @@
  "engine": "InnoDB",
  "field_order": [
   "customer",
-  "area_name"
+  "area_name",
+  "emails"
  ],
  "fields": [
   {
@@ -23,11 +24,17 @@
    "label": "Area / Plant",
    "reqd": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "emails",
+   "fieldtype": "Small Text",
+   "label": "Emails",
+   "description": "Contacts for this area - one per line (commas or semicolons also work)."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-29 00:00:00.000000",
+ "modified": "2026-09-29 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Area",
