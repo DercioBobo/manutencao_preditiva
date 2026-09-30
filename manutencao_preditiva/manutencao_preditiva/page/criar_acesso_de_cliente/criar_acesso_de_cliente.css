@@ -145,30 +145,18 @@
 	border-color: #f1c7c1;
 }
 
-/* ---- result panel (credentials to hand over) ----------------------------- */
+/* ---- hand-over dialog (credentials + how to deliver them) ---------------- */
 
-.cac-result {
-	background: #f1f8f7;
-	border: 1px solid #cfe6e3;
-	border-radius: var(--cac-radius);
-	padding: 16px 18px;
-}
-
-.cac-result-title {
-	font-weight: 700;
-	font-size: 13px;
-	color: var(--cac-accent);
-	margin-bottom: 8px;
-}
-
-.cac-result-meta {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	color: var(--cac-muted);
-	font-size: 12px;
-	margin-bottom: 10px;
-	overflow-wrap: anywhere;
+/* Frappe mounts dialogs outside .cac, so the tokens are repeated here. */
+.cac-dialog {
+	--cac-ink: #1c2b36;
+	--cac-muted: #6b7680;
+	--cac-line: #e3e8eb;
+	--cac-surface: #ffffff;
+	--cac-surface-2: #f7f9fa;
+	--cac-accent: #14877e;
+	--cac-danger: #c0392b;
+	--cac-radius: 12px;
 }
 
 .cac-result-note {
@@ -177,11 +165,93 @@
 	margin-bottom: 8px;
 }
 
+.cac-hand-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	padding-bottom: 14px;
+	margin-bottom: 16px;
+	border-bottom: 1px solid var(--cac-line);
+	font-size: 13px;
+	color: var(--cac-muted);
+	overflow-wrap: anywhere;
+}
+
+.cac-hand-meta b {
+	color: var(--cac-ink);
+}
+
+.cac-hand-sep {
+	color: var(--cac-line);
+}
+
+.cac-hand-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 24px;
+}
+
+.cac-hand-label {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--cac-muted);
+	margin-bottom: 10px;
+}
+
+.cac-hand-label-gap {
+	margin-top: 18px;
+}
+
+.cac-hand-hint {
+	margin: -4px 0 0;
+	font-size: 11.5px;
+	color: var(--cac-muted);
+}
+
+.cac-hand-steps {
+	padding: 16px 18px;
+	background: #f1f8f7;
+	border: 1px solid #cfe6e3;
+	border-radius: var(--cac-radius);
+}
+
+.cac-hand-list {
+	margin: 0 0 12px;
+	padding-left: 18px;
+	font-size: 12.5px;
+	color: var(--cac-ink);
+}
+
+.cac-hand-list li {
+	margin-bottom: 6px;
+}
+
+.cac-hand-message {
+	width: 100%;
+	resize: vertical;
+	padding: 9px 11px;
+	font-size: 12.5px;
+	line-height: 1.5;
+	font-family: inherit;
+	color: var(--cac-ink);
+	background: var(--cac-surface);
+	border: 1px solid var(--cac-line);
+	border-radius: 8px;
+	margin-bottom: 10px;
+}
+
+.cac-hand-copy {
+	width: 100%;
+}
+
 .cac-link-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	margin-bottom: 12px;
+	margin-bottom: 10px;
 }
 
 .cac-copy-label {
@@ -189,7 +259,7 @@
 	font-size: 11px;
 	font-weight: 600;
 	color: var(--cac-muted);
-	min-width: 58px;
+	min-width: 64px;
 }
 
 .cac-link-input {
@@ -209,8 +279,34 @@
 	font-size: 12px;
 }
 
-.cac-link-again {
-	width: 100%;
+/* ---- password field: masked input + Mostrar/Ocultar ---------------------- */
+
+.cac-password-wrap {
+	position: relative;
+}
+
+.cac-password-wrap input {
+	padding-right: 70px;
+}
+
+.cac-password-toggle {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	transform: translateY(-50%);
+	padding: 2px 8px;
+	border: 0;
+	background: none;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--cac-accent, #14877e);
+	cursor: pointer;
+}
+
+@media (max-width: 720px) {
+	.cac-hand-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 /* ---- users panel -------------------------------------------------------- */

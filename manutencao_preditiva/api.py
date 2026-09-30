@@ -56,6 +56,32 @@ def _generate_temp_password(length=12):
 	return "".join(required)
 
 
+MIN_PASSWORD_LENGTH = 8
+
+
+def _chosen_or_generated_password(password, email, full_name=None):
+	"""The password the admin typed, checked, or a generated one when left
+	blank. Beyond a minimum length, the site's own password policy (System
+	Settings > Enable Password Policy) applies when it's switched on - the
+	same check Frappe runs on its own set-password page."""
+	password = (password or "").strip()
+	if not password:
+		return _generate_temp_password()
+
+	if len(password) < MIN_PASSWORD_LENGTH:
+		frappe.throw(_("A password tem de ter pelo menos {0} caracteres.").format(MIN_PASSWORD_LENGTH))
+
+	if cint(frappe.get_system_settings("enable_password_policy")):
+		from frappe.core.doctype.user.user import test_password_strength
+
+		result = test_password_strength(password, user_data=(email, full_name or "")) or {}
+		feedback = result.get("feedback") or {}
+		if not feedback.get("password_policy_validation_passed", True):
+			hint = feedback.get("warning") or " ".join(feedback.get("suggestions") or [])
+			frappe.throw(_("Password demasiado fraca para a política do sistema.") + (f" {hint}" if hint else ""))
+	return password
+
+
 def _setup_desk(user, profile):
 	"""Land the user on their profile's workspace and apply the MP Module
 	Profile, which decides which modules show in the sidebar - the User
@@ -152,10 +178,11 @@ def _set_customer_scope(email, customer):
 
 
 @frappe.whitelist()
-def criar_utilizador(full_name, email, profile, customer=None, send_welcome=1):
+def criar_utilizador(full_name, email, profile, customer=None, send_welcome=1, password=None):
 	"""Create a login with one of the page's profiles in a single call:
 	roles, desk setup, the Customer scope for a client, a ready-to-use
-	temporary password and a set-password link - so the admin never needs
+	password (the one the admin chose, or a generated one) and a
+	set-password link - so the admin never needs
 	the User or User Permission screens, and can hand over working
 	credentials without depending on outgoing email.
 
@@ -177,6 +204,8 @@ def criar_utilizador(full_name, email, profile, customer=None, send_welcome=1):
 
 	if frappe.db.exists("User", email):
 		frappe.throw(_("Já existe uma conta com o email {0}. Gere-a na lista abaixo.").format(email))
+	# Checked before the User exists, so a rejected password creates nothing.
+	temp_password = _chosen_or_generated_password(password, email, full_name)
 
 	first_name, _sep, last_name = full_name.partition(" ")
 	user = frappe.get_doc(
@@ -195,7 +224,6 @@ def criar_utilizador(full_name, email, profile, customer=None, send_welcome=1):
 
 	_set_customer_scope(email, customer)
 
-	temp_password = _generate_temp_password()
 	update_password(email, temp_password)
 	relative_link = user._reset_password(send_email=bool(send_welcome))
 
@@ -257,17 +285,18 @@ def listar_utilizadores():
 
 
 @frappe.whitelist()
-def repor_password(email):
-	"""Fresh temp password + reset link - same result shape as creation, so
-	the UI reuses the same copy-and-hand-over flow."""
+def repor_password(email, password=None):
+	"""New password (chosen by the admin, or generated when blank) + reset
+	link - same result shape as creation, so the UI reuses the same
+	copy-and-hand-over flow."""
 	frappe.only_for(ACCESS_MANAGER_ROLES)
 	email = (email or "").strip()
 	_require_manageable(email)
 
-	temp_password = _generate_temp_password()
+	user = frappe.get_doc("User", email)
+	temp_password = _chosen_or_generated_password(password, email, user.full_name)
 	update_password(email, temp_password)
 
-	user = frappe.get_doc("User", email)
 	relative_link = user._reset_password(send_email=False)
 
 	return {"email": email, "password": temp_password, "link": get_url(relative_link)}

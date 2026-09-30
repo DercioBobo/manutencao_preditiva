@@ -15,6 +15,7 @@ const CAC_PROFILES = [
 	{ value: "Cliente", hint: "Vê apenas os relatórios emitidos do seu cliente, no Portal do Cliente." },
 ];
 const CAC_CLIENT = "Cliente";
+const CAC_MIN_PASSWORD = 8;
 
 manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 	constructor(wrapper) {
@@ -46,8 +47,6 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		this.$card = $('<div class="cac-card">').appendTo($aside);
 		$(`<div class="cac-card-title">${__("Novo utilizador")}</div>`).appendTo(this.$card);
 		this.render_form();
-
-		this.$result = $('<div class="cac-result">').appendTo($aside).hide();
 
 		const $panel = $('<div class="cac-panel">').appendTo($main);
 		const $head = $('<div class="cac-panel-head">').appendTo($panel);
@@ -112,6 +111,8 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		this.customer_control.refresh();
 		this.$customer_field.hide();
 
+		this.password_control = this.make_password_control($field()[0]);
+
 		this.send_welcome_control = frappe.ui.form.make_control({
 			df: {
 				fieldtype: "Check",
@@ -131,6 +132,46 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		this.$submit_btn.on("click", () => this.submit());
 	}
 
+	// Optional password: blank means the server generates one. A Data
+	// control masked as a password, with a Mostrar/Ocultar toggle - the
+	// admin is about to hand it over, so they must be able to check it.
+	make_password_control(parent, extra_df) {
+		const control = frappe.ui.form.make_control({
+			df: {
+				fieldtype: "Data",
+				fieldname: "password",
+				label: __("Password"),
+				placeholder: __("Deixa em branco para gerar"),
+				description: __("Mínimo {0} caracteres. Em branco, é gerada uma password segura.", [CAC_MIN_PASSWORD]),
+				...(extra_df || {}),
+			},
+			parent,
+			render_input: true,
+		});
+		control.refresh();
+		control.$input.attr({ type: "password", autocomplete: "new-password" });
+
+		const $wrap = $('<div class="cac-password-wrap">').insertBefore(control.$input);
+		control.$input.appendTo($wrap);
+		const $toggle = $(`<button type="button" class="cac-password-toggle">${__("Mostrar")}</button>`).appendTo($wrap);
+		$toggle.on("click", () => {
+			const hidden = control.$input.attr("type") === "password";
+			control.$input.attr("type", hidden ? "text" : "password");
+			$toggle.text(hidden ? __("Ocultar") : __("Mostrar"));
+		});
+		return control;
+	}
+
+	// Mirrors the server's minimum (api.MIN_PASSWORD_LENGTH) so a short
+	// password is caught before the round trip; the server still decides.
+	check_password(password) {
+		if (password && password.length < CAC_MIN_PASSWORD) {
+			frappe.msgprint(__("A password tem de ter pelo menos {0} caracteres.", [CAC_MIN_PASSWORD]));
+			return false;
+		}
+		return true;
+	}
+
 	on_profile_change() {
 		const profile = this.profile_control.get_value();
 		const hint = CAC_PROFILES.find((p) => p.value === profile)?.hint || "";
@@ -144,6 +185,7 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		const profile = this.profile_control.get_value();
 		const customer = profile === CAC_CLIENT ? (this.customer_control.get_value() || "").trim() : "";
 		const send_welcome = this.send_welcome_control.get_value() ? 1 : 0;
+		const password = this.password_control.get_value() || "";
 
 		if (!full_name || !email || !profile) {
 			frappe.msgprint(__("Preenche o Nome, o Email e o Perfil."));
@@ -153,15 +195,23 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 			frappe.msgprint(__("Escolhe o cliente."));
 			return;
 		}
+		if (!this.check_password(password)) return;
 
 		frappe.call({
 			method: "manutencao_preditiva.api.criar_utilizador",
-			args: { full_name, email, profile, customer, send_welcome },
+			args: { full_name, email, profile, customer, send_welcome, password },
 			freeze: true,
 			freeze_message: __("A criar utilizador…"),
 			callback: (r) => {
 				if (!r.message) return;
-				this.render_result(r.message, { full_name, customer });
+				this.reset_form();
+				this.show_credentials({
+					title: __("Utilizador criado"),
+					full_name,
+					customer,
+					chosen: Boolean(password),
+					...r.message,
+				});
 				this.load_accounts();
 			},
 		});
@@ -172,40 +222,101 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		this.email_control.set_value("");
 		this.profile_control.set_value("");
 		this.customer_control.set_value("");
+		this.password_control.set_value("");
 		this.send_welcome_control.set_value(1);
 		this.$customer_field.hide();
-		this.$result.hide().empty();
 	}
 
-	render_result(result, { full_name, customer }) {
-		this.$result.empty().show();
+	// ---- hand-over: credentials + how to deliver them ---------------------
+	//
+	// A dialog rather than a panel under the form: it's the one moment the
+	// password is visible (it's never shown again), so it has to be seen,
+	// and it has room for the delivery instructions next to the values.
 
-		$(`<div class="cac-result-title">✓ ${__("Utilizador criado")}: ${frappe.utils.escape_html(full_name)}</div>`).appendTo(
-			this.$result
+	login_url() {
+		return `${frappe.urllib.get_base_url()}/login`;
+	}
+
+	handover_message(result) {
+		const first_name = (result.full_name || "").split(/\s+/)[0];
+		return [
+			first_name ? __("Olá {0},", [first_name]) : __("Olá,"),
+			"",
+			__("O teu acesso à plataforma Manutenção Preditiva está pronto:"),
+			`${__("Endereço")}: ${this.login_url()}`,
+			`${__("Email")}: ${result.email}`,
+			`${__("Password")}: ${result.password}`,
+			"",
+			__("Se preferires escolher a tua própria password, usa este link:"),
+			result.link,
+		].join("\n");
+	}
+
+	show_credentials(result) {
+		const esc = frappe.utils.escape_html;
+		const dialog = new frappe.ui.Dialog({
+			title: result.title,
+			size: "large",
+			fields: [{ fieldtype: "HTML", fieldname: "body" }],
+			primary_action_label: __("Concluído"),
+			primary_action: () => dialog.hide(),
+		});
+		dialog.$wrapper.addClass("cac-dialog");
+		const $body = dialog.fields_dict.body.$wrapper.empty();
+
+		const meta = [
+			result.full_name && `<b>${esc(result.full_name)}</b>`,
+			esc(result.email),
+			result.profile && esc(__(result.profile)),
+			result.customer && esc(result.customer),
+		].filter(Boolean);
+		$(`<div class="cac-hand-meta">${meta.join('<span class="cac-hand-sep">·</span>')}</div>`).appendTo($body);
+
+		const $grid = $('<div class="cac-hand-grid">').appendTo($body);
+
+		const $creds = $('<div class="cac-hand-creds">').appendTo($grid);
+		$(`<div class="cac-hand-label">${__("Credenciais")}</div>`).appendTo($creds);
+		this.build_copy_row(__("Endereço"), this.login_url(), $creds);
+		this.build_copy_row(__("Email"), result.email, $creds);
+		this.build_copy_row(__("Password"), result.password, $creds);
+		$(`<div class="cac-hand-hint">${
+			result.chosen ? __("Password definida por ti.") : __("Password gerada automaticamente.")
+		} ${__("Não volta a ser mostrada depois de fechares esta janela.")}</div>`).appendTo($creds);
+
+		$(`<div class="cac-hand-label cac-hand-label-gap">${__("Link para escolher a própria password")}</div>`).appendTo(
+			$creds
 		);
+		this.build_copy_row(__("Link"), result.link, $creds);
 
-		const $meta = $('<div class="cac-result-meta">').appendTo(this.$result);
-		$(`<span>${__("Email")}: <b>${frappe.utils.escape_html(result.email)}</b></span>`).appendTo($meta);
-		$(`<span>${__("Perfil")}: <b>${frappe.utils.escape_html(result.profile)}</b></span>`).appendTo($meta);
-		if (customer) {
-			$(`<span>${__("Cliente")}: <b>${frappe.utils.escape_html(customer)}</b></span>`).appendTo($meta);
+		const $steps = $('<div class="cac-hand-steps">').appendTo($grid);
+		$(`<div class="cac-hand-label">${__("Como entregar o acesso")}</div>`).appendTo($steps);
+		const steps = [
+			__("Copia a mensagem abaixo e envia-a à pessoa (WhatsApp, SMS ou email)."),
+			__("A pessoa entra no endereço com o email e a password."),
+			__("Se preferir outra password, usa o link - fica com a que escolher e a anterior deixa de funcionar."),
+		];
+		if (result.email_sent) {
+			steps.push(__("Também foi enviado um email para {0} com o link.", [esc(result.email)]));
 		}
+		$(`<ol class="cac-hand-list">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>`).appendTo($steps);
 
-		$(`<p class="cac-result-note">${__(
-			"Conta pronta a usar com esta password - podes partilhar o email e a password diretamente (WhatsApp, telefone, etc.), sem depender do envio de email."
-		)}</p>`).appendTo(this.$result);
-		this.build_copy_row(__("Password"), result.password, this.$result);
+		const message = this.handover_message(result);
+		$('<textarea readonly class="cac-hand-message" rows="12">').val(message).appendTo($steps);
+		$(`<button class="cac-btn cac-btn-primary cac-hand-copy">${__("Copiar mensagem")}</button>`)
+			.appendTo($steps)
+			.on("click", () => this.copy(message));
 
-		$(`<p class="cac-result-note">${__(
-			"Em alternativa, a pessoa pode definir a própria password através deste link:"
-		)}</p>`).appendTo(this.$result);
-		this.build_copy_row(__("Link"), result.link, this.$result);
+		dialog.show();
+	}
 
-		$(`<button class="cac-btn cac-link-again">${__("Criar outro utilizador")}</button>`)
-			.appendTo(this.$result)
-			.on("click", () => this.reset_form());
-
-		this.$result[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
+	copy(value, $input) {
+		if ($input) $input.select();
+		const done = () => frappe.show_alert({ message: __("Copiado"), indicator: "green" });
+		if (navigator.clipboard) {
+			navigator.clipboard.writeText(value).then(done, () => document.execCommand("copy") && done());
+		} else if (document.execCommand("copy")) {
+			done();
+		}
 	}
 
 	build_copy_row(label, value, $parent) {
@@ -214,13 +325,7 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 		const $input = $('<input type="text" readonly class="cac-link-input">').val(value).appendTo($row);
 		const $copy_btn = $(`<button class="cac-btn">${__("Copiar")}</button>`).appendTo($row);
 
-		$copy_btn.on("click", () => {
-			$input.select();
-			navigator.clipboard
-				?.writeText(value)
-				.then(() => frappe.show_alert({ message: __("Copiado"), indicator: "green" }))
-				.catch(() => document.execCommand("copy"));
-		});
+		$copy_btn.on("click", () => this.copy(value, $input));
 	}
 
 	// ---- existing accounts: list + manage --------------------------------
@@ -368,34 +473,42 @@ manutencao_preditiva.GestaoDeUtilizadores = class GestaoDeUtilizadores {
 	}
 
 	reset_password(row) {
-		const message = `${__("Repor a password de")} ${frappe.utils.escape_html(row.email)}? ${__(
-			"A password atual deixa de funcionar de imediato."
-		)}`;
-		frappe.confirm(message, () => {
-			frappe.call({
-				method: "manutencao_preditiva.api.repor_password",
-				args: { email: row.email },
-				freeze: true,
-				freeze_message: __("A repor password…"),
-				callback: (r) => {
-					if (!r.message) return;
-					this.render_reset_result(row, r.message);
-				},
-			});
+		const dialog = new frappe.ui.Dialog({
+			title: `${__("Repor password")} - ${row.full_name || row.email}`,
+			fields: [{ fieldtype: "HTML", fieldname: "note" }, { fieldtype: "HTML", fieldname: "password" }],
+			primary_action_label: __("Repor password"),
+			primary_action: () => {
+				const password = password_control.get_value() || "";
+				if (!this.check_password(password)) return;
+				frappe.call({
+					method: "manutencao_preditiva.api.repor_password",
+					args: { email: row.email, password },
+					freeze: true,
+					freeze_message: __("A repor password…"),
+					callback: (r) => {
+						if (!r.message) return;
+						dialog.hide();
+						this.show_credentials({
+							title: __("Password reposta"),
+							full_name: row.full_name,
+							profile: row.profile,
+							customer: row.customers,
+							chosen: Boolean(password),
+							...r.message,
+						});
+					},
+				});
+			},
 		});
-	}
-
-	render_reset_result(row, result) {
-		this.$result.empty().show();
-		$(`<div class="cac-result-title">✓ ${__("Password reposta para")} ${frappe.utils.escape_html(row.email)}</div>`).appendTo(
-			this.$result
+		dialog.fields_dict.note.$wrapper.html(
+			`<p class="cac-result-note">${__("A password atual de {0} deixa de funcionar de imediato.", [
+				`<b>${frappe.utils.escape_html(row.email)}</b>`,
+			])}</p>`
 		);
-		$(`<p class="cac-result-note">${__(
-			"Partilha esta nova password com a pessoa, ou envia-lhe o link para escolher a sua:"
-		)}</p>`).appendTo(this.$result);
-		this.build_copy_row(__("Password"), result.password, this.$result);
-		this.build_copy_row(__("Link"), result.link, this.$result);
-		this.$result[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
+		const password_control = this.make_password_control(dialog.fields_dict.password.$wrapper[0], {
+			label: __("Nova password"),
+		});
+		dialog.show();
 	}
 
 	toggle_enabled(row) {
