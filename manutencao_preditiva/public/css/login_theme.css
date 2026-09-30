@@ -38,6 +38,16 @@ body.mp-login-page .page-header-wrapper {
 	display: none;
 }
 
+/* The website navbar (just the logo, again) and footer - the brand panel
+   already covers both. :has() hides them before login_theme.js runs, so
+   the bar doesn't flash in; the class covers browsers without :has(). */
+body.mp-login-page .navbar,
+body.mp-login-page .web-footer,
+body:has(.for-login) .navbar,
+body:has(.for-login) .web-footer {
+	display: none !important;
+}
+
 .mp-login-host {
 	display: grid;
 	grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
