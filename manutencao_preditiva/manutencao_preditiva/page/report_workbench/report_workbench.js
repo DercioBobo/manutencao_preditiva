@@ -14,9 +14,10 @@
 // point for this page's own (see render_sheets_card()/open_sheet_dialog()).
 //
 // Structure (2026-09-29): master-detail. A navigator on the left lists
-// every report grouped by customer and area (newest period first, drafts
-// counted per area, readings-only months muted), with search, a customer
-// filter and Draft/Issued chips; the selected report fills the right - its
+// one customer's reports for one period (customer + period selects on top,
+// defaulting to the last-used customer and its newest month; "All periods"
+// falls back to folders per area), with search and Draft/Issued chips -
+// see init_nav_scope(). The selected report fills the right - its
 // header, summary and sheets as ONE panel (render_sheets_card() appends
 // into render_report_card()'s container), so it reads as "this report and
 // everything in it". The selection is the URL (/app/report-workbench/<name>,
@@ -109,7 +110,8 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 		this.nav_status = "all";
 		this.nav_search = "";
 		this.nav_customer = "";
-		this.nav_open = new Set(); // area groups the user unfolded
+		this.nav_period = ""; // "YYYY-MM" of report_date, or "all"
+		this.nav_open = new Set(); // area groups the user unfolded ("All periods")
 
 		this.page = frappe.ui.make_app_page({
 			parent: wrapper,
@@ -165,22 +167,26 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				this.render_nav_list();
 			});
 
-		const $customer_wrap = $('<div class="rw-field rw-nav-customer">').appendTo($filters);
-		this.nav_customer_control = frappe.ui.form.make_control({
-			df: {
-				fieldtype: "Link",
-				fieldname: "nav_customer",
-				placeholder: __("All customers"),
-				options: "Customer",
-				onchange: () => {
-					this.nav_customer = this.nav_customer_control.get_value();
-					this.render_nav_list();
-				},
-			},
-			parent: $customer_wrap[0],
-			render_input: true,
-		});
-		this.nav_customer_control.refresh();
+		// Customer first, then the period - one customer's month at a time
+		// instead of every customer's every area in one long tree.
+		const $scope = $('<div class="rw-nav-scope">').appendTo($filters);
+		this.$nav_customer = $(`<select class="rw-select" aria-label="${__("Customer")}">`)
+			.appendTo($scope)
+			.on("change", () => {
+				this.nav_customer = this.$nav_customer.val();
+				this.remember_nav_customer();
+				this.nav_period = this.latest_period(this.nav_customer);
+				this.render_nav_scope();
+				this.render_nav_list();
+				this.render_empty_state();
+			});
+		this.$nav_period = $(`<select class="rw-select" aria-label="${__("Period")}">`)
+			.appendTo($scope)
+			.on("change", () => {
+				this.nav_period = this.$nav_period.val();
+				this.render_nav_list();
+				this.render_empty_state();
+			});
 
 		this.$nav_chips = $('<div class="rw-chips">').appendTo($filters);
 		[
@@ -227,58 +233,171 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			})
 			.then((r) => {
 				this.nav_rows = r.message || [];
+				this.init_nav_scope();
+				this.render_nav_scope();
 				this.render_nav_list();
 				this.render_empty_state();
 			});
 	}
 
-	get_nav_groups() {
-		const rows = this.nav_rows.filter((row) => {
+	// ---- navigator scope: customer + period -------------------------------------
+	//
+	// A period is the report_date's calendar month. Default customer: the
+	// last one picked on this browser, else the one with the newest report;
+	// default period: that customer's newest month. Opening a report by URL
+	// moves the scope to it (focus_nav_on) so it's always visible on the left.
+
+	period_key(row) {
+		return (row.report_date || "").slice(0, 7);
+	}
+
+	customer_periods(customer) {
+		const periods = new Map();
+		this.nav_rows.forEach((row) => {
+			if (row.customer !== customer) return;
+			const key = this.period_key(row);
+			if (!key) return;
+			const p = periods.get(key) || { key, label: "", count: 0 };
+			p.count++;
+			// A diagnosed report's label wins over a readings-only one's.
+			if (row.period_label && (!p.label || !row.readings_only)) p.label = row.period_label;
+			periods.set(key, p);
+		});
+		return [...periods.values()]
+			.map((p) => ({ ...p, label: p.label || moment(p.key + "-01").format("MMM/YY").toUpperCase() }))
+			.sort((a, b) => b.key.localeCompare(a.key));
+	}
+
+	latest_period(customer) {
+		const periods = this.customer_periods(customer);
+		return periods.length ? periods[0].key : "all";
+	}
+
+	remember_nav_customer() {
+		try {
+			localStorage.setItem("rw_nav_customer", this.nav_customer || "");
+		} catch (e) {
+			// storage blocked - the default (newest report's customer) still works
+		}
+	}
+
+	init_nav_scope() {
+		const customers = new Set(this.nav_rows.map((r) => r.customer));
+		if (this.nav_customer && customers.has(this.nav_customer)) {
+			const periods = this.customer_periods(this.nav_customer).map((p) => p.key);
+			if (this.nav_period !== "all" && !periods.includes(this.nav_period)) {
+				this.nav_period = periods[0] || "all";
+			}
+			return;
+		}
+		let saved = "";
+		try {
+			saved = localStorage.getItem("rw_nav_customer") || "";
+		} catch (e) {
+			saved = "";
+		}
+		// nav_rows is newest first, so [0] is the most recent report's customer.
+		this.nav_customer = customers.has(saved) ? saved : (this.nav_rows[0] && this.nav_rows[0].customer) || "";
+		this.nav_period = this.latest_period(this.nav_customer);
+	}
+
+	render_nav_scope() {
+		const counts = new Map();
+		this.nav_rows.forEach((r) => counts.set(r.customer, (counts.get(r.customer) || 0) + 1));
+		this.$nav_customer.empty();
+		[...counts.keys()]
+			.sort((a, b) => (a || "").localeCompare(b || ""))
+			.forEach((c) => $("<option>").val(c).text(c).appendTo(this.$nav_customer));
+		this.$nav_customer.val(this.nav_customer).prop("disabled", !counts.size);
+
+		this.$nav_period.empty();
+		this.customer_periods(this.nav_customer).forEach((p) =>
+			$("<option>").val(p.key).text(`${p.label} · ${p.count}`).appendTo(this.$nav_period)
+		);
+		$("<option>").val("all").text(__("All periods")).appendTo(this.$nav_period);
+		this.$nav_period.val(this.nav_period).prop("disabled", !counts.size);
+	}
+
+	focus_nav_on(doc) {
+		if (!doc) return;
+		const key = (doc.report_date || "").slice(0, 7);
+		const changed = doc.customer !== this.nav_customer || (this.nav_period !== "all" && key !== this.nav_period);
+		if (!changed) return;
+		this.nav_customer = doc.customer;
+		if (this.nav_period !== "all") this.nav_period = key;
+		this.render_nav_scope();
+	}
+
+	get_scoped_rows() {
+		return this.nav_rows.filter((row) => {
+			if (row.customer !== this.nav_customer) return false;
+			if (this.nav_period !== "all" && this.period_key(row) !== this.nav_period) return false;
 			if (this.nav_status !== "all" && row.status !== this.nav_status) return false;
-			if (this.nav_customer && row.customer !== this.nav_customer) return false;
 			if (!this.nav_search) return true;
-			return [row.area_name, row.period_label, row.service_reference, row.customer, row.name]
+			return [row.area_name, row.period_label, row.service_reference, row.name]
 				.filter(Boolean)
 				.join(" ")
 				.toLowerCase()
 				.includes(this.nav_search);
 		});
+	}
 
-		// One group per customer + area, alphabetical; reports inside stay in
-		// the query's newest-first order.
+	// "All periods": one folder per area, newest report first inside.
+	get_nav_groups(rows) {
 		const groups = new Map();
 		rows.forEach((row) => {
 			const key = `${row.customer}\u0000${row.area}`;
 			if (!groups.has(key)) {
-				groups.set(key, { key, customer: row.customer, area_name: row.area_name || row.area, rows: [] });
+				groups.set(key, { key, area_name: row.area_name || row.area, rows: [] });
 			}
 			groups.get(key).rows.push(row);
 		});
-		return [...groups.values()].sort(
-			(a, b) => (a.customer || "").localeCompare(b.customer || "") || (a.area_name || "").localeCompare(b.area_name || "")
-		);
+		return [...groups.values()].sort((a, b) => (a.area_name || "").localeCompare(b.area_name || ""));
 	}
 
 	render_nav_list() {
 		this.$nav_list.empty();
-		const groups = this.get_nav_groups();
-		if (!groups.length) {
+		const rows = this.get_scoped_rows();
+		if (!rows.length) {
 			$(`<div class="rw-nav-empty">${
 				this.nav_rows.length ? __("No reports match.") : __("No reports yet - create one or import Word reports.")
 			}</div>`).appendTo(this.$nav_list);
 			return;
 		}
 
-		const several_customers = new Set(groups.map((g) => g.customer)).size > 1;
+		if (this.nav_period === "all") this.render_nav_groups(rows);
+		else this.render_nav_period(rows);
+
+		const $active = this.$nav_list.find(".rw-nav-item.active");
+		if ($active.length) $active[0].scrollIntoView({ block: "nearest" });
+	}
+
+	// One month: a flat list of that month's areas - no folders to open.
+	// Diagnosed reports first, the readings-only ones (history the import
+	// adds for the previous month) muted underneath.
+	render_nav_period(rows) {
+		const sorted = [...rows].sort(
+			(a, b) =>
+				(a.readings_only ? 1 : 0) - (b.readings_only ? 1 : 0) ||
+				(a.area_name || a.area || "").localeCompare(b.area_name || b.area || "")
+		);
+		const drafts = rows.filter((r) => r.status === "Draft").length;
+		$(`<div class="rw-nav-period-head">
+			<span>${__("{0} areas", [rows.length])}</span>
+			${drafts ? `<span class="rw-nav-draft-count" title="${__("Drafts")}">${__("{0} draft", [drafts])}</span>` : ""}
+		</div>`).appendTo(this.$nav_list);
+
+		sorted.forEach((row) => {
+			const $item = this.make_nav_item(row, "rw-nav-item-flat");
+			$item.find(".rw-nav-period").text(row.area_name || row.area || row.name);
+			$item.find(".rw-nav-sub").text(row.readings_only ? __("readings only") : row.service_reference || "");
+			$item.appendTo(this.$nav_list);
+		});
+	}
+
+	render_nav_groups(rows) {
 		const searching = Boolean(this.nav_search);
-		let customer_shown = null;
-
-		groups.forEach((group) => {
-			if (several_customers && group.customer !== customer_shown) {
-				customer_shown = group.customer;
-				$('<div class="rw-nav-customer-head">').text(group.customer).appendTo(this.$nav_list);
-			}
-
+		this.get_nav_groups(rows).forEach((group) => {
 			// Open when searching, when it holds the selected report, or when
 			// the user opened it; otherwise folded, so 20+ areas stay scannable.
 			const has_active = group.rows.some((r) => r.name === this.report);
@@ -306,27 +425,29 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 
 			const $items = $('<div class="rw-nav-items">').appendTo($group);
 			group.rows.forEach((row) => {
-				const $item = $(`<a class="rw-nav-item" href="/app/report-workbench/${encodeURIComponent(row.name)}">
-					<span class="rw-nav-dot" style="background:${RW_REPORT_STATUS_HEX[row.status] || "#8a94a0"}"
-						title="${frappe.utils.escape_html(row.status || "")}"></span>
-					<span class="rw-nav-period"></span>
-					<span class="rw-nav-sub"></span>
-				</a>`)
-					.toggleClass("active", row.name === this.report)
-					.toggleClass("readings-only", Boolean(row.readings_only))
-					.appendTo($items);
+				const $item = this.make_nav_item(row);
 				$item.find(".rw-nav-period").text(row.period_label || row.report_date || row.name);
 				$item.find(".rw-nav-sub").text(row.readings_only ? __("readings only") : row.service_reference || row.name);
-				$item.on("click", (e) => {
-					if (e.ctrlKey || e.metaKey || e.shiftKey) return; // let the browser open a new tab
-					e.preventDefault();
-					this.select_report(row.name);
-				});
+				$item.appendTo($items);
 			});
 		});
+	}
 
-		const $active = this.$nav_list.find(".rw-nav-item.active");
-		if ($active.length) $active[0].scrollIntoView({ block: "nearest" });
+	make_nav_item(row, extra_class) {
+		const $item = $(`<a class="rw-nav-item ${extra_class || ""}" href="/app/report-workbench/${encodeURIComponent(row.name)}">
+			<span class="rw-nav-dot" style="background:${RW_REPORT_STATUS_HEX[row.status] || "#8a94a0"}"
+				title="${frappe.utils.escape_html(row.status || "")}"></span>
+			<span class="rw-nav-period"></span>
+			<span class="rw-nav-sub"></span>
+		</a>`)
+			.toggleClass("active", row.name === this.report)
+			.toggleClass("readings-only", Boolean(row.readings_only));
+		$item.on("click", (e) => {
+			if (e.ctrlKey || e.metaKey || e.shiftKey) return; // let the browser open a new tab
+			e.preventDefault();
+			this.select_report(row.name);
+		});
+		return $item;
 	}
 
 	// ---- selection <-> URL -----------------------------------------------------
@@ -353,15 +474,25 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 	render_empty_state() {
 		this.$empty_state.toggle(!this.report).empty();
 		if (this.report) return;
-		const rows = this.nav_rows || [];
+		const rows = (this.nav_rows || []).filter(
+			(r) =>
+				r.customer === this.nav_customer && (this.nav_period === "all" || this.period_key(r) === this.nav_period)
+		);
 		const drafts = rows.filter((r) => r.status === "Draft").length;
-		const areas = new Set(rows.map((r) => `${r.customer}\u0000${r.area}`)).size;
+		const areas = new Set(rows.map((r) => r.area)).size;
+		const period = this.$nav_period && this.nav_period !== "all" ? this.$nav_period.find("option:selected").text() : "";
 		$(`<div class="rw-empty-title">${__("Pick a report on the left")}</div>`).appendTo(this.$empty_state);
-		$(`<div class="rw-empty-sub">${__("{0} reports across {1} areas · {2} in draft", [
-			rows.length,
-			areas,
-			drafts,
-		])}</div>`).appendTo(this.$empty_state);
+		$('<div class="rw-empty-sub">')
+			.text(
+				__("{0}{1}: {2} reports across {3} areas · {4} in draft", [
+					this.nav_customer || "",
+					period ? ` · ${period.split(" · ")[0]}` : "",
+					rows.length,
+					areas,
+					drafts,
+				])
+			)
+			.appendTo(this.$empty_state);
 	}
 
 	// ---- import FR.TEC.09 Word reports ---------------------------------------
@@ -620,6 +751,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 						this.report_doc = doc;
 						this.$workbench.show();
 						this.render_empty_state();
+						this.focus_nav_on(doc);
 						this.render_nav_list();
 						this.render_report_header();
 						this.load_summary();
