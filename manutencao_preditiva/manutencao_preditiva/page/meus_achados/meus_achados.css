@@ -1343,7 +1343,7 @@
 .ma-hbar-scroll {
 	max-height: 420px;
 	overflow-y: auto;
-	padding-right: 6px;
+	padding-right: 14px;
 	overscroll-behavior: contain;
 }
 
@@ -1469,5 +1469,65 @@
 	}
 	.ma-ov-tiles .ma-tile:nth-child(n + 5) {
 		border-bottom: none;
+	}
+}
+
+/* ---- Scrollbars: slim rounded thumb, no track or arrows ------------------- */
+
+.ma-hbar-scroll,
+.ma-mx-wrap,
+.ma-plant-areas {
+	scroll-behavior: smooth;
+}
+
+.ma-hbar-scroll::-webkit-scrollbar,
+.ma-mx-wrap::-webkit-scrollbar,
+.ma-plant-areas::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+.ma-hbar-scroll::-webkit-scrollbar-track,
+.ma-mx-wrap::-webkit-scrollbar-track,
+.ma-plant-areas::-webkit-scrollbar-track,
+.ma-hbar-scroll::-webkit-scrollbar-corner,
+.ma-mx-wrap::-webkit-scrollbar-corner,
+.ma-plant-areas::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+.ma-hbar-scroll::-webkit-scrollbar-button,
+.ma-mx-wrap::-webkit-scrollbar-button,
+.ma-plant-areas::-webkit-scrollbar-button {
+	display: none;
+}
+
+/* The transparent border + padding-box clip draws a 4px pill inside the
+   10px gutter, so it reads slim but stays easy to grab. */
+.ma-hbar-scroll::-webkit-scrollbar-thumb,
+.ma-mx-wrap::-webkit-scrollbar-thumb,
+.ma-plant-areas::-webkit-scrollbar-thumb {
+	background: var(--ma-line-strong);
+	background-clip: padding-box;
+	border: 3px solid transparent;
+	border-radius: 999px;
+	min-height: 40px;
+}
+
+.ma-hbar-scroll::-webkit-scrollbar-thumb:hover,
+.ma-mx-wrap::-webkit-scrollbar-thumb:hover,
+.ma-plant-areas::-webkit-scrollbar-thumb:hover {
+	background: var(--ma-muted);
+	background-clip: padding-box;
+	border-width: 2px;
+}
+
+/* Firefox has no ::-webkit-scrollbar; Chrome would let these override it. */
+@supports not selector(::-webkit-scrollbar) {
+	.ma-hbar-scroll,
+	.ma-mx-wrap,
+	.ma-plant-areas {
+		scrollbar-width: thin;
+		scrollbar-color: var(--ma-line-strong) transparent;
 	}
 }
