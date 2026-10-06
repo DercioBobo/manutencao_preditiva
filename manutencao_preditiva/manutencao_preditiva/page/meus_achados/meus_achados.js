@@ -718,7 +718,10 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		});
 		$(`<span><span class="ma-mx-cell ma-mx-readings"></span>${__("Readings only")}</span>`).appendTo($legend);
 
-		this.$matrix_wrap = $('<div class="ma-mx-wrap">').appendTo($parent);
+		// Table on the left, the condition count of whatever it shows on the right.
+		const $split = $('<div class="ma-mx-split">').appendTo($parent);
+		this.$matrix_wrap = $('<div class="ma-mx-wrap">').appendTo($split);
+		this.$matrix_chart = $('<div class="ma-chart-card ma-mx-chart">').appendTo($split);
 	}
 
 	set_matrix_filter(key) {
@@ -765,6 +768,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		this.$matrix_wrap.empty();
 		const periods = this.history.periods;
 		const rows = this.get_matrix_rows();
+		this.render_matrix_chart(rows);
 		if (!rows.length) {
 			$(`<div class="ma-empty">${
 				this.history.equipment.length ? __("No equipment matches.") : __("No inspections yet.")
@@ -821,6 +825,55 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			const row = rows[$cell.closest("tr").data("index")];
 			if ($cell.data("readings")) return this.open_equipment_dialog(row);
 			this.open_finding_dialog({ data: { name: $cell.data("sheet") } });
+		});
+	}
+
+	// Vertical bar per condition: how many of the equipment the matrix is
+	// showing (area / chip / search applied) sit in each state in the newest
+	// inspection month. The four severities always show; the extras only
+	// when something is in them.
+	render_matrix_chart(rows) {
+		const $c = this.$matrix_chart.empty();
+		const periods = this.history.periods;
+		const last = periods[periods.length - 1];
+		const status_of = (r) => {
+			const cell = last && r.cells[last.key];
+			return !cell ? "Not inspected" : cell.severity || "Readings only";
+		};
+		const always = ["Normal", "Acceptable", "Alarm", "Critical"];
+		const bars = MA_OVERVIEW_STATUSES.map(([status, color]) => ({
+			status,
+			color,
+			n: rows.filter((r) => status_of(r) === status).length,
+		})).filter((b) => b.n || always.includes(b.status));
+		const total = rows.length;
+		const max = Math.max(1, ...bars.map((b) => b.n));
+
+		$(`<div class="ma-chart-title">${__("Equipment by condition")}</div>
+			<div class="ma-mx-chart-sub">${frappe.utils.escape_html(
+				[last ? last.label : "", this.matrix_area ? this.area_name(this.matrix_area) : __("All areas")]
+					.filter(Boolean)
+					.join(" · ")
+			)} · ${__("{0} equipment", [total])}</div>`).appendTo($c);
+
+		if (!total) {
+			$(`<div class="ma-empty">${__("No equipment matches.")}</div>`).appendTo($c);
+			return;
+		}
+
+		const $plot = $('<div class="ma-vbar-plot">').appendTo($c);
+		bars.forEach((b) => {
+			$(`<div class="ma-vbar-col${b.n ? "" : " is-zero"}" title="${frappe.utils.escape_html(__(b.status))}: ${b.n} (${ma_pct(
+				b.n,
+				total
+			)})">
+				<div class="ma-vbar-track">
+					<div class="ma-vbar-value">${b.n}</div>
+					<div class="ma-vbar" style="height:${(b.n / max) * 100}%;background:${b.color}"></div>
+				</div>
+				<div class="ma-vbar-pct">${ma_pct(b.n, total)}</div>
+				<div class="ma-vbar-label">${__(b.status)}</div>
+			</div>`).appendTo($plot);
 		});
 	}
 
