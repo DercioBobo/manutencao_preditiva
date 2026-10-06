@@ -621,11 +621,13 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 		}
 
 		const max = data[0].total;
+		// Rows scroll, the legend below stays put.
+		const $rows = $('<div class="ma-hbar-scroll">').appendTo(this.$area_findings);
 		data.forEach((d) => {
 			const $row = $(`<div class="ma-hbar-row">
 				<div class="ma-hbar-head"><span>${frappe.utils.escape_html(this.area_name(d.area))}</span><b>${d.total}</b></div>
 				<div class="ma-hbar" style="width:${Math.max((d.total / max) * 100, 8)}%"></div>
-			</div>`).appendTo(this.$area_findings);
+			</div>`).appendTo($rows);
 			const $bar = $row.find(".ma-hbar");
 			d.counts.forEach((n, i) => {
 				if (!n) return;

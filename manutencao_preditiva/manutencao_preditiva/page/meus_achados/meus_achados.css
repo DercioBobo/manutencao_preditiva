@@ -1241,6 +1241,20 @@
 .ma-plant-areas {
 	max-height: 320px;
 	overflow: auto;
+	/* Soft divider from the donut: a hairline that fades out at both ends. */
+	padding-left: 20px;
+	border-left: 1px solid transparent;
+	border-image: linear-gradient(to bottom, transparent, var(--ma-line-strong) 18%, var(--ma-line-strong) 82%, transparent) 1;
+}
+
+@media (max-width: 900px) {
+	.ma-plant-areas {
+		padding-left: 0;
+		padding-top: 16px;
+		border-left: none;
+		border-top: 1px solid transparent;
+		border-image: linear-gradient(to right, transparent, var(--ma-line-strong) 18%, var(--ma-line-strong) 82%, transparent) 1;
+	}
 }
 
 .ma-progress {
@@ -1324,6 +1338,13 @@
 
 .ma-ov-grid .ma-chart-card + .ma-chart-card {
 	margin-top: 0;
+}
+
+.ma-hbar-scroll {
+	max-height: 420px;
+	overflow-y: auto;
+	padding-right: 6px;
+	overscroll-behavior: contain;
 }
 
 .ma-hbar-row {
