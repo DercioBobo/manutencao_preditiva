@@ -1,6 +1,9 @@
 # Copyright (c) 2026, Dércio Bobo and contributors
 # For license information, please see license.txt
 
+from manutencao_preditiva.manutencao_preditiva.doctype.defect_type.defect_type import (
+	seed_defaults as seed_defect_types,
+)
 from manutencao_preditiva.manutencao_preditiva.doctype.vibration_alarm_settings.vibration_alarm_settings import (
 	seed_defaults,
 )
@@ -8,3 +11,4 @@ from manutencao_preditiva.manutencao_preditiva.doctype.vibration_alarm_settings.
 
 def after_install():
 	seed_defaults()
+	seed_defect_types()

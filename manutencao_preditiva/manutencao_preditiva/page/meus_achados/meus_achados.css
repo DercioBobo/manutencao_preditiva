@@ -711,7 +711,8 @@
 	white-space: normal;
 }
 
-.ma-area-table .ma-area-date {
+.ma-area-table .ma-area-date,
+.ma-area-table .ma-zero {
 	color: var(--ma-muted);
 }
 
@@ -1237,4 +1238,51 @@
 
 .ma-area-table th.ma-num {
 	font-family: var(--ma-font-sans);
+}
+
+/* ---- Overview: headline counters ------------------------------------------ */
+
+.ma-tile-sub,
+.ma-tile-delta {
+	margin-top: 2px;
+	font-size: 11px;
+	color: var(--ma-muted);
+}
+
+.ma-tile-delta {
+	font-weight: 600;
+	font-family: var(--ma-font-mono);
+}
+
+.ma-tile-delta.is-up {
+	color: var(--ma-red);
+}
+
+.ma-tile-delta.is-down {
+	color: var(--ma-green);
+}
+
+/* Six counters wrap to 3 / 2 per row - draw the row seams the base strip lacks. */
+@media (max-width: 900px) {
+	.ma-ov-tiles .ma-tile {
+		border-bottom: 1px solid var(--ma-line);
+	}
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+	.ma-ov-tiles .ma-tile:nth-child(3n) {
+		border-right: none;
+	}
+	.ma-ov-tiles .ma-tile:nth-child(n + 4) {
+		border-bottom: none;
+	}
+}
+
+@media (max-width: 720px) {
+	.ma-ov-tiles .ma-tile:nth-child(2n) {
+		border-right: none;
+	}
+	.ma-ov-tiles .ma-tile:nth-child(n + 5) {
+		border-bottom: none;
+	}
 }

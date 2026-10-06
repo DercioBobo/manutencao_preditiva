@@ -63,6 +63,31 @@ class InspectionReport(Document):
 				title=_("Cannot Issue"),
 			)
 
+		# An Alarm / Critical with no defect picked is a hole in the defect
+		# statistics. Imported Word reports (word_import) skip this: they
+		# were issued long ago with free text only, and get classified later.
+		# Only checked at the moment of issuing, so reports issued before
+		# this rule existed can still be saved.
+		if self.flags.ignore_defect_check or not self.has_value_changed("status"):
+			return
+		with_defects = set(
+			frappe.get_all(
+				"Equipment Inspection Defect",
+				filters={"parenttype": "Equipment Inspection", "parent": ["in", [s.name for s in sheets]]},
+				pluck="parent",
+			)
+		)
+		unclassified = [
+			sheet.equipment
+			for sheet in sheets
+			if sheet.severity in ("Alarm", "Critical") and sheet.name not in with_defects
+		]
+		if unclassified:
+			frappe.throw(
+				_("Pick at least one defect on these Alarm / Critical equipment: {0}").format(", ".join(unclassified)),
+				title=_("Cannot Issue"),
+			)
+
 	def onload(self):
 		self.set_onload("summary", self.get_summary())
 

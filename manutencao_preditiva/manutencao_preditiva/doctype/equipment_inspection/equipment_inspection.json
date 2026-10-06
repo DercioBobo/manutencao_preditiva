@@ -21,6 +21,7 @@
   "sb_diagnosis",
   "suggested_severity",
   "severity",
+  "defect_items",
   "defects",
   "cb_2",
   "recommendations",
@@ -162,9 +163,17 @@
    "description": "Follows the suggestion until you set it yourself - e.g. when the spectrum shows bearing defects."
   },
   {
+   "fieldname": "defect_items",
+   "fieldtype": "Table",
+   "label": "Defects",
+   "options": "Equipment Inspection Defect",
+   "description": "One row per defect found. Required on Alarm / Critical sheets before the report can be issued."
+  },
+  {
    "fieldname": "defects",
    "fieldtype": "Small Text",
-   "label": "Defects Found"
+   "label": "Defects Found",
+   "description": "The wording for the report. Written from the Defects rows while you haven't edited it."
   },
   {
    "fieldname": "cb_2",
@@ -238,7 +247,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-29 13:00:00.000000",
+ "modified": "2026-10-06 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Manutencao Preditiva",
  "name": "Equipment Inspection",

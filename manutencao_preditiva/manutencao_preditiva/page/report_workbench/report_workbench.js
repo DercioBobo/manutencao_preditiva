@@ -82,6 +82,51 @@ const RW_DEFAULT_BANDS = [
 ];
 const RW_DEFAULT_ACCELERATION = [0.9, 1.5, 2.5];
 
+// Same options as Defect Type.defect_group / Equipment Inspection Defect.location.
+const RW_DEFECT_GROUPS = [
+	"Bearing",
+	"Lubrication",
+	"Unbalance",
+	"Alignment",
+	"Looseness",
+	"Rotor / Run-out",
+	"Wear",
+	"Electrical",
+	"Thermal",
+	"Structural",
+	"Other",
+];
+const RW_DEFECT_LOCATIONS = [
+	"Motor",
+	"Pump",
+	"Fan",
+	"Gearbox",
+	"Compressor",
+	"Coupling",
+	"Belt / Pulley",
+	"Shaft",
+	"Structure / Base",
+	"Electrical Panel",
+	"Other",
+];
+// Inspection Report.technique -> Defect Type checkbox (defect_type.py TECHNIQUE_FIELDS).
+const RW_TECHNIQUES = ["Vibration", "Thermography", "Ultrasound", "Oil Analysis"];
+const RW_DEFECT_TYPE_API = "manutencao_preditiva.manutencao_preditiva.doctype.defect_type.defect_type";
+
+// The report's "Defects Found" wording for a list of defect rows - mirrors
+// equipment_inspection.py defects_text(), so the dialog shows what the
+// server will write.
+function rw_defects_text(rows) {
+	return rows
+		.filter((r) => r.defect_type)
+		.map((r) => {
+			const where = [r.location, r.side].filter(Boolean).join(" ");
+			const line = where ? `${r.defect_type} - ${where}` : r.defect_type;
+			return r.note ? `${line}: ${r.note}` : line;
+		})
+		.join("\n");
+}
+
 function rw_rgba(hex, alpha) {
 	const n = parseInt(hex.slice(1), 16);
 	return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
@@ -1361,15 +1406,135 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			? Promise.resolve(preloaded_data)
 			: frappe.call({ method: "frappe.client.get", args: { doctype: "Equipment Inspection", name } }).then((r) => r.message);
 
-		Promise.all([doc_promise, this.get_alarm_limits()])
-			.then(([data, limits]) => {
+		Promise.all([doc_promise, this.get_alarm_limits(), this.get_defect_types()])
+			.then(([data, limits, defect_types]) => {
 				if (this.sheet_dialog) this.sheet_dialog.hide();
-				this.show_sheet_dialog(data, limits);
+				this.show_sheet_dialog(data, limits, defect_types);
 			})
 			.finally(() => frappe.dom.unfreeze());
 	}
 
-	show_sheet_dialog(data, limits) {
+	// Loaded once per page; a type created from a sheet is added to this
+	// same list (open_new_defect_type_dialog), so no reload is needed.
+	get_defect_types() {
+		if (!this.defect_types_promise) {
+			this.defect_types_promise = frappe
+				.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Defect Type",
+						fields: ["name", "defect_group", "disabled", ...RW_TECHNIQUES.map((t) => frappe.scrub(t))],
+						order_by: "name asc",
+						limit_page_length: 0,
+					},
+				})
+				.then((r) => r.message || []);
+		}
+		return this.defect_types_promise;
+	}
+
+	// "+ New defect type" from a sheet. The server refuses an exact repeat and
+	// reports look-alikes (defect_type.create_defect_type); a look-alike is
+	// offered back so the technician picks the existing one rather than
+	// typing a near-duplicate. on_pick(type) gets the created or chosen type.
+	open_new_defect_type_dialog(technique, defect_types, on_pick) {
+		const dialog = new frappe.ui.Dialog({
+			title: __("New Defect Type"),
+			fields: [
+				{
+					fieldtype: "Data",
+					fieldname: "defect_name",
+					label: __("Defect"),
+					reqd: 1,
+					description: __("Just the defect - e.g. Looseness. The location (Motor, Pump, DE/NDE) goes on the sheet."),
+				},
+				{
+					fieldtype: "Select",
+					fieldname: "defect_group",
+					label: __("Group"),
+					options: RW_DEFECT_GROUPS.join("\n"),
+					default: "Other",
+					reqd: 1,
+				},
+				{ fieldtype: "Section Break", label: __("Found by") },
+				...RW_TECHNIQUES.map((t, i) => [
+					...(i === 2 ? [{ fieldtype: "Column Break" }] : []),
+					{ fieldtype: "Check", fieldname: frappe.scrub(t), label: __(t), default: t === technique ? 1 : 0 },
+				]).flat(),
+			],
+			primary_action_label: __("Create"),
+			primary_action: (values) => create(values, 0),
+		});
+
+		const picked = (name, group) => {
+			let type = defect_types.find((t) => t.name === name);
+			if (!type) {
+				type = { name, defect_group: group, disabled: 0 };
+				RW_TECHNIQUES.forEach((t) => (type[frappe.scrub(t)] = values_of(t)));
+				defect_types.push(type);
+				defect_types.sort((a, b) => a.name.localeCompare(b.name));
+			}
+			dialog.hide();
+			on_pick(type);
+		};
+		const values_of = (t) => (dialog.get_value(frappe.scrub(t)) ? 1 : 0);
+
+		const create = (values, force) => {
+			const techniques = RW_TECHNIQUES.filter((t) => values[frappe.scrub(t)]);
+			if (!techniques.length) {
+				frappe.msgprint(__("Tick at least one technique that can find this defect."));
+				return;
+			}
+			frappe
+				.call({
+					method: `${RW_DEFECT_TYPE_API}.create_defect_type`,
+					args: { defect_name: values.defect_name, defect_group: values.defect_group, techniques, force },
+					freeze: true,
+				})
+				.then((r) => {
+					const res = r.message || {};
+					if (res.exists) {
+						frappe.show_alert({ message: __("{0} already exists - picked it.", [res.exists]), indicator: "blue" });
+						picked(res.exists);
+					} else if (res.similar) {
+						choose_similar(values, res.similar);
+					} else if (res.name) {
+						frappe.show_alert({ message: __("Defect type {0} created", [res.name]), indicator: "green" });
+						picked(res.name, values.defect_group);
+					}
+				});
+		};
+
+		const choose_similar = (values, similar) => {
+			const esc = frappe.utils.escape_html;
+			const ask = new frappe.ui.Dialog({
+				title: __("Is it one of these?"),
+				fields: [{ fieldtype: "HTML", fieldname: "body" }],
+			});
+			const $body = $('<div class="rw rw-dialog">').appendTo(ask.fields_dict.body.$wrapper.empty());
+			$(`<p>${__("Similar defects already exist. Use one of them if it is the same defect:")}</p>`).appendTo($body);
+			const $list = $('<div class="rw-similar-list">').appendTo($body);
+			similar.forEach((s) => {
+				$(`<button class="rw-btn">${esc(s.name)} <span class="rw-similar-group">${esc(__(s.defect_group || ""))}</span></button>`)
+					.appendTo($list)
+					.on("click", () => {
+						ask.hide();
+						picked(s.name, s.defect_group);
+					});
+			});
+			$(`<button class="rw-btn rw-btn-primary rw-similar-new">${__("No - create {0}", [esc(values.defect_name)])}</button>`)
+				.appendTo($body)
+				.on("click", () => {
+					ask.hide();
+					create(values, 1);
+				});
+			ask.show();
+		};
+
+		dialog.show();
+	}
+
+	show_sheet_dialog(data, limits, defect_types) {
 		const esc = frappe.utils.escape_html;
 		const locked = this.report_doc && this.report_doc.status === "Issued";
 		const order = this.get_filtered_sheet_rows().map((r) => r.name);
@@ -1501,12 +1666,123 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 			.attr("placeholder", "0")
 			.appendTo($tol_row);
 
+		// -- defects: picked from the Defect Type list, one row per defect, so
+		// they can be counted. The "Defects Found" text below follows the rows
+		// until someone rewrites it (same rule as equipment_inspection.py).
+		const technique = (this.report_doc && this.report_doc.technique) || "Vibration";
+		const defect_rows = (data.defect_items || []).map((r) => ({
+			defect_type: r.defect_type,
+			location: r.location || "",
+			side: r.side || "",
+			note: r.note || "",
+		}));
+		state.defects_auto = rw_defects_text(defect_rows);
+
+		const $def_block = $('<div class="rw-sheet-block">').appendTo($right);
+		$(`<div class="rw-sheet-section">${__("Defects")}</div>`).appendTo($def_block);
+		const $def_rows = $('<div class="rw-defects">').appendTo($def_block);
+		const $def_hint = $('<div class="rw-defects-hint">').appendTo($def_block);
+		const $def_add = $(`<button class="rw-btn rw-btn-sm">${__("+ Add defect")}</button>`)
+			.appendTo($def_block)
+			.on("click", () => {
+				defect_rows.push({ defect_type: "", location: "", side: "", note: "" });
+				render_defects();
+				$def_rows.find(".rw-defect-type").last().trigger("focus");
+			});
+
 		const textarea = (label, value, rows) => {
 			const $field = $('<label class="rw-sheet-field">').appendTo($right);
 			$(`<span>${label}</span>`).appendTo($field);
 			return $(`<textarea class="rw-input" rows="${rows}">`).val(value || "").appendTo($field);
 		};
 		const $defects = textarea(__("Defects Found"), data.defects, 3);
+
+		const defects_changed = () => {
+			state.dirty = true;
+			const text = rw_defects_text(defect_rows);
+			const current = ($defects.val() || "").trim();
+			if (!current || current === state.defects_auto) $defects.val(text);
+			state.defects_auto = text;
+			render_defects_hint();
+		};
+
+		const render_defects_hint = () => {
+			const effective = state.severity_mode === "auto" ? state.suggested : state.severity;
+			const missing = ["Alarm", "Critical"].includes(effective) && !defect_rows.some((r) => r.defect_type);
+			$def_hint
+				.toggleClass("rw-warn", missing)
+				.text(
+					missing
+						? __("Pick at least one defect - an {0} sheet needs it before the report can be issued.", [__(effective)])
+						: defect_rows.length
+						? ""
+						: __("No defects.")
+				);
+		};
+
+		const type_options = (current) => {
+			// What this technique can find, plus whatever the row already has
+			// (an older or disabled type stays visible on the sheet using it).
+			const field = frappe.scrub(technique);
+			const offered = defect_types.filter((t) => (!t.disabled && t[field]) || t.name === current);
+			let html = `<option value="">${__("Pick a defect…")}</option>`;
+			RW_DEFECT_GROUPS.forEach((group) => {
+				const in_group = offered.filter((t) => (t.defect_group || "Other") === group);
+				if (!in_group.length) return;
+				html += `<optgroup label="${esc(__(group))}">`;
+				in_group.forEach((t) => (html += `<option value="${esc(t.name)}">${esc(t.name)}</option>`));
+				html += "</optgroup>";
+			});
+			return html + `<option value="__new__">${__("+ New defect type…")}</option>`;
+		};
+		const plain_options = (placeholder, values) =>
+			`<option value="">${placeholder}</option>` +
+			values.map((v) => `<option value="${esc(v)}">${esc(__(v))}</option>`).join("");
+
+		const render_defects = () => {
+			$def_rows.empty();
+			defect_rows.forEach((row, i) => {
+				const $row = $('<div class="rw-defect-row">').appendTo($def_rows);
+				const $type = $(`<select class="rw-select rw-defect-type">${type_options(row.defect_type)}</select>`)
+					.val(row.defect_type)
+					.appendTo($row);
+				$(`<button class="rw-btn rw-btn-sm rw-defect-remove" title="${__("Remove")}">×</button>`)
+					.appendTo($row)
+					.on("click", () => {
+						defect_rows.splice(i, 1);
+						render_defects();
+						defects_changed();
+					});
+				const $loc = $(`<select class="rw-select rw-defect-loc">${plain_options(__("Location"), RW_DEFECT_LOCATIONS)}</select>`)
+					.val(row.location)
+					.appendTo($row);
+				const $side = $(`<select class="rw-select rw-defect-side">${plain_options(__("Side"), ["DE", "NDE"])}</select>`)
+					.val(row.side)
+					.appendTo($row);
+				const $note = $(`<input class="rw-input rw-defect-note" placeholder="${__("Note")}">`).val(row.note).appendTo($row);
+
+				$type.on("change", () => {
+					if ($type.val() !== "__new__") {
+						row.defect_type = $type.val();
+						return defects_changed();
+					}
+					$type.val(row.defect_type);
+					this.open_new_defect_type_dialog(technique, defect_types, (type) => {
+						row.defect_type = type.name;
+						render_defects();
+						defects_changed();
+					});
+				});
+				$loc.on("change", () => ((row.location = $loc.val()), defects_changed()));
+				$side.on("change", () => ((row.side = $side.val()), defects_changed()));
+				$note.on("input", () => ((row.note = $note.val()), defects_changed()));
+			});
+			if (locked) {
+				$def_rows.find("select, input").prop("disabled", true);
+				$def_rows.find(".rw-defect-remove").hide();
+			}
+			render_defects_hint();
+		};
 		const $recommendations = textarea(__("Recommendations"), data.recommendations, 3);
 		const $follow_up = textarea(__("Actions Taken / Follow-up"), data.follow_up, 2);
 
@@ -1590,15 +1866,18 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 					? `${__("Follows the readings")}: ${effective ? rw_badge(__(effective), RW_SEVERITY_HEX[effective]) : "—"}`
 					: `${__("Set by the analyst - readings changes won't overwrite it.")}`
 			);
+			render_defects_hint();
 		};
 
 		$body.on("input", "input, textarea", () => (state.dirty = true));
 		$readings.on("input", "input", evaluate);
 		$tolerance.on("input", evaluate);
+		render_defects();
 		evaluate();
 
 		if (locked) {
-			$body.find("input, textarea").prop("disabled", true);
+			$body.find("input, textarea, select").prop("disabled", true);
+			$def_add.hide();
 			$sev.find("button").prop("disabled", true);
 			dialog.get_primary_btn().hide();
 			dialog.get_secondary_btn && dialog.get_secondary_btn().hide();
@@ -1618,6 +1897,7 @@ manutencao_preditiva.ReportWorkbench = class ReportWorkbench {
 				})
 				.get(),
 			tolerance_percent: flt($tolerance.val()) || 0,
+			defect_items: defect_rows.filter((r) => r.defect_type),
 			defects: $defects.val(),
 			recommendations: $recommendations.val(),
 			follow_up: $follow_up.val(),

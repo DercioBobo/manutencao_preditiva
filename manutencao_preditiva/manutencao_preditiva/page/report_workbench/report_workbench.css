@@ -1225,3 +1225,82 @@
 		flex-direction: column;
 	}
 }
+
+/* ---- sheet dialog: defects picked from the Defect Type list ---------------- */
+
+.rw-defects {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+/* Defect on its own line (it's the part that's counted), then where it was
+ * found and a note underneath - the dialog's right column is narrow. */
+.rw-defect-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1.3fr) 82px minmax(0, 1.7fr) auto;
+	gap: 6px;
+	padding: 8px;
+	border: 1px solid var(--rw-line);
+	border-radius: var(--rw-radius-sm);
+	background: var(--rw-surface-2);
+}
+
+.rw-defect-row .rw-defect-type {
+	grid-column: 1 / 4;
+}
+
+.rw-defect-row .rw-defect-loc,
+.rw-defect-row .rw-defect-side,
+.rw-defect-row .rw-defect-note {
+	font-weight: 400;
+	padding-top: 5px;
+	padding-bottom: 5px;
+}
+
+.rw-defect-row .rw-defect-loc {
+	grid-column: 1;
+}
+
+.rw-defect-row .rw-defect-note {
+	grid-column: 3 / 5;
+}
+
+.rw-defect-remove {
+	align-self: start;
+	line-height: 1.2;
+}
+
+.rw-defects-hint {
+	font-size: 12px;
+	color: var(--rw-muted);
+	margin-bottom: 8px;
+}
+
+.rw-defects-hint:empty {
+	display: none;
+}
+
+.rw-similar-list {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+	margin-bottom: 14px;
+}
+
+.rw-similar-list .rw-btn {
+	display: flex;
+	justify-content: space-between;
+	text-align: left;
+}
+
+.rw-similar-group {
+	color: var(--rw-muted);
+	font-size: 12px;
+}
+
+.rw-similar-new {
+	width: 100%;
+}

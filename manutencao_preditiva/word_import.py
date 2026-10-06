@@ -331,6 +331,9 @@ def _fill_report(report, sheets, equipment, column, content, result, progress=No
 
 	report.reload()
 	report.status = "Issued"
+	# Old reports carry free-text defects only - classifying them is a
+	# separate clean-up, not a reason to leave the import in Draft.
+	report.flags.ignore_defect_check = True
 	try:
 		report.save()
 	except frappe.ValidationError as e:

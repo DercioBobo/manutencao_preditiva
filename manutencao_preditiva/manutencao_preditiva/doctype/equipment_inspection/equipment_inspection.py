@@ -17,7 +17,7 @@ from manutencao_preditiva.vibration import NOT_COLLECTED, evaluate, worst
 # excludes the Client Response section (client_response, responsible,
 # due_date, action_status, completion_date, all permlevel 1): that's
 # exactly what's meant to be edited after Issue. "readings" and "images"
-# are child tables and checked separately (see validate_locked_after_issue)
+# and "defect_items" are child tables and checked separately (see validate_locked_after_issue)
 # since comparing them with a plain != does not work in Frappe.
 # fieldname -> the (untranslated) label shown in the "reopen it to Draft
 # before changing ..." error - translated with _() at the point of use, not
@@ -49,6 +49,7 @@ class EquipmentInspection(Document):
 		self.link_previous_sheet()
 		self.evaluate_readings()
 		self.set_severity()
+		self.set_defects_text()
 		self.set_completion_date()
 
 	def validate_locked_after_issue(self):
@@ -78,6 +79,12 @@ class EquipmentInspection(Document):
 				title=_("Report Issued"),
 			)
 
+		if self._defects_snapshot(self.defect_items) != self._defects_snapshot(before.defect_items):
+			frappe.throw(
+				_("{0} is Issued - reopen it to Draft before changing defects.").format(self.report),
+				title=_("Report Issued"),
+			)
+
 		if self._images_snapshot(self.images) != self._images_snapshot(before.images):
 			frappe.throw(
 				_("{0} is Issued - reopen it to Draft before changing images.").format(self.report),
@@ -93,6 +100,10 @@ class EquipmentInspection(Document):
 			(row.point, flt(row.velocity_mm_s), flt(row.acceleration_g), flt(row.temperature_c))
 			for row in readings or []
 		]
+
+	@staticmethod
+	def _defects_snapshot(rows):
+		return [(row.defect_type, row.location or "", row.side or "", row.note or "") for row in rows or []]
 
 	@staticmethod
 	def _images_snapshot(images):
@@ -233,6 +244,30 @@ class EquipmentInspection(Document):
 				_("Enter at least one reading, or set the severity to {0}.").format(_(NOT_COLLECTED))
 			)
 
+	def set_defects_text(self):
+		"""The report's "Defects Found" wording follows the Defects rows for
+		as long as nobody has rewritten it - same idea as severity following
+		the suggestion. Imported sheets have their own text and no rows, so
+		they are never touched."""
+		before = self.get_doc_before_save()
+		previous_text = defects_text(before.defect_items) if before else ""
+		if (self.defects or "").strip() in ("", previous_text):
+			self.defects = defects_text(self.defect_items)
+
 	def set_completion_date(self):
 		if self.action_status == "Done" and not self.completion_date:
 			self.completion_date = today()
+
+
+def defects_text(rows):
+	"""'Lack of bearing lubrication - Motor DE: grease nipple blocked', one
+	line per row. Mirrored in report_workbench.js (defects_text) so the
+	dialog shows the same wording before saving."""
+	lines = []
+	for row in rows or []:
+		if not row.defect_type:
+			continue
+		where = " ".join(filter(None, [row.location, row.side]))
+		line = f"{row.defect_type} - {where}" if where else row.defect_type
+		lines.append(f"{line}: {row.note}" if row.note else line)
+	return "\n".join(lines)

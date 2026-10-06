@@ -281,6 +281,8 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			this.render_overview();
 		});
 
+		this.$ov_tiles = $('<div class="ma-tiles ma-ov-tiles">').appendTo($parent);
+
 		const $plant = $('<div class="ma-chart-card ma-plant">').appendTo($parent);
 		this.$donut = $('<div class="ma-donut-wrap">').appendTo($plant);
 		this.$area_table = $('<div class="ma-plant-areas">').appendTo($plant);
@@ -349,12 +351,68 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				: __("No inspections yet")
 		);
 
+		this.render_ov_tiles(rows, areas.size);
 		this.render_donut(rows);
 		this.render_area_table(rows);
 		this.render_kpis(rows.length, inspected);
 		this.render_area_findings(rows);
 		this.render_condition_chart();
 		this.render_matrix();
+	}
+
+	// Headline counters for the selected month. Alarm / Critical carry the
+	// change against the previous inspection month - up is bad, down is good.
+	render_ov_tiles(rows, area_count) {
+		this.$ov_tiles.empty();
+		const total = rows.length;
+		const inspected = rows.filter((r) => r.cell).length;
+		const pct = total ? Math.round((inspected / total) * 100) : 0;
+		const idx = this.history.periods.findIndex((p) => p.key === this.selected_period);
+		const prev = idx > 0 ? this.history.periods[idx - 1] : null;
+		const count = (sev) => rows.filter((r) => r.status === sev).length;
+		const prev_count = (sev) =>
+			this.history.equipment.filter((r) => r.cells[prev.key] && r.cells[prev.key].severity === sev).length;
+
+		const delta_note = (sev) => {
+			if (!prev) return "";
+			const d = count(sev) - prev_count(sev);
+			const cls = d > 0 ? "is-up" : d < 0 ? "is-down" : "is-flat";
+			const arrow = d > 0 ? "▲" : d < 0 ? "▼" : "=";
+			return `<div class="ma-tile-delta ${cls}">${arrow}${d ? Math.abs(d) : ""} ${__("vs {0}", [prev.label])}</div>`;
+		};
+
+		const tile = (label, value, { cls = "", note = "", onclick = null } = {}) => {
+			const $t = $(`<div class="ma-tile ${cls}">
+				<div class="ma-tile-value">${value}</div>
+				<div class="ma-tile-label">${label}</div>
+				${note}
+			</div>`).appendTo(this.$ov_tiles);
+			if (onclick) $t.addClass("ma-tile-link").on("click", onclick);
+		};
+		const show_attention = () => {
+			this.matrix_area = "";
+			this.$matrix_area.val("");
+			this.set_matrix_filter("attention");
+			this.render_matrix();
+			this.scroll_to_matrix();
+		};
+
+		const alarm = count("Alarm");
+		const critical = count("Critical");
+		const missing = total - inspected;
+		tile(__("Areas"), area_count);
+		tile(__("Equipment"), total);
+		tile(__("Inspected"), inspected, {
+			cls: pct === 100 ? "ma-tile-good" : "",
+			note: `<div class="ma-tile-sub">${__("{0}% this month", [pct])}</div>`,
+		});
+		tile(__("Not inspected"), missing, { cls: missing ? "ma-tile-warning" : "" });
+		tile(__("Alarm"), alarm, { cls: alarm ? "ma-tile-warning" : "", note: delta_note("Alarm"), onclick: show_attention });
+		tile(__("Critical"), critical, {
+			cls: critical ? "ma-tile-critical" : "",
+			note: delta_note("Critical"),
+			onclick: show_attention,
+		});
 	}
 
 	render_donut(rows) {
@@ -418,14 +476,14 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 
 		const $table = $(`<table class="ma-area-table"><thead><tr>
 			<th>${__("Area")}</th><th>${__("Condition")}</th><th>${__("Inspected")}</th>
-			<th class="ma-num">${__("Alarm / Critical")}</th><th class="ma-num">${__("Date")}</th>
+			<th class="ma-num">${__("Alarm")}</th><th class="ma-num">${__("Critical")}</th>
+			<th class="ma-num">${__("Date")}</th>
 		</tr></thead><tbody></tbody></table>`).appendTo(this.$area_table);
 		const $tbody = $table.find("tbody");
 
 		this.group_by_area(rows).forEach(([area, area_rows]) => {
 			const done = area_rows.filter((r) => r.cell);
 			const pct = Math.round((done.length / area_rows.length) * 100);
-			const attention = area_rows.filter((r) => ["Alarm", "Critical"].includes(r.status)).length;
 			const dates = done.map((r) => r.cell.report_date).filter(Boolean).sort();
 
 			const $tr = $("<tr>").appendTo($tbody);
@@ -446,9 +504,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				<span class="ma-progress-text">${done.length}/${area_rows.length}</span>
 			</div></td>`).appendTo($tr);
 
-			$('<td class="ma-num">')
-				.html(attention ? `<b style="color:${MA_SEVERITY_HEX.Alarm}">${attention}</b>` : "0")
-				.appendTo($tr);
+			["Alarm", "Critical"].forEach((sev) => {
+				const n = area_rows.filter((r) => r.status === sev).length;
+				$('<td class="ma-num">')
+					.html(n ? `<b style="color:${MA_SEVERITY_HEX[sev]}">${n}</b>` : `<span class="ma-zero">0</span>`)
+					.appendTo($tr);
+			});
 			$('<td class="ma-num ma-area-date">')
 				.text(dates.length ? frappe.datetime.str_to_user(dates[dates.length - 1]) : "—")
 				.appendTo($tr);

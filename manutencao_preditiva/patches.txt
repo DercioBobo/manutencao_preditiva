@@ -8,3 +8,4 @@ manutencao_preditiva.patches.arredondar_temperaturas_termografia
 manutencao_preditiva.patches.seed_vibration_alarm_settings
 manutencao_preditiva.patches.garantir_acesso_administrador
 manutencao_preditiva.patches.aplicar_module_profile_mp
+manutencao_preditiva.patches.seed_defect_types

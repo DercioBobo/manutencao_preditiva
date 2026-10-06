@@ -14,6 +14,21 @@ frappe.ui.form.on("Equipment Inspection", {
 		frm.set_query("equipment", () => ({
 			filters: { customer: frm.doc.customer, area: frm.doc.area, disabled: 0 },
 		}));
+		// Only the defects this report's technique can find (Defect Type's
+		// technique checkboxes) - the technique is looked up in onload below.
+		frm.set_query("defect_type", "defect_items", () => {
+			const filters = { disabled: 0 };
+			if (frm.__technique_field) filters[frm.__technique_field] = 1;
+			return { filters };
+		});
+	},
+
+	onload(frm) {
+		if (!frm.doc.report) return;
+		frappe.db.get_value("Inspection Report", frm.doc.report, "technique").then((r) => {
+			const technique = r.message && r.message.technique;
+			frm.__technique_field = technique ? frappe.scrub(technique) : null;
+		});
 	},
 
 	// Server-side (prepare_readings()) only builds the readings table on
