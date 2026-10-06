@@ -64,6 +64,17 @@ const MA_STATUS_HEX = {
 	"Not Applicable": "#8a94a0",
 };
 
+// Share of a whole as a label: one decimal under 10% so a handful of
+// Critical in a big plant doesn't read as "0%".
+function ma_pct(n, total) {
+	if (!total || !n) return "0%";
+	const p = (n / total) * 100;
+	return `${p < 10 ? p.toFixed(1).replace(/\.0$/, "") : Math.round(p)}%`;
+}
+
+// Light fills (Readings only) need dark text on top.
+const MA_LIGHT_FILLS = new Set(["#c9d3db"]);
+
 function hex_to_rgba(hex, alpha) {
 	const r = parseInt(hex.slice(1, 3), 16);
 	const g = parseInt(hex.slice(3, 5), 16);
@@ -436,7 +447,7 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			arcs += `<circle r="${r}" cx="90" cy="90" fill="none" stroke="${s.color}" stroke-width="26"
 				stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-offset}"><title>${frappe.utils.escape_html(
 				__(s.status)
-			)}: ${s.n}</title></circle>`;
+			)}: ${s.n} (${ma_pct(s.n, total)})</title></circle>`;
 			offset += len;
 		});
 		if (!total) arcs = `<circle r="${r}" cx="90" cy="90" fill="none" stroke="var(--ma-surface-2)" stroke-width="26"></circle>`;
@@ -457,7 +468,33 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 				<span class="ma-legend-swatch" style="background:${s.color}"></span>
 				<span class="ma-legend-label">${__(s.status)}</span>
 				<span class="ma-legend-value">${s.n}</span>
+				<span class="ma-legend-pct">${ma_pct(s.n, total)}</span>
 			</div>`).appendTo($legend);
+		});
+
+		// Share of the plant per condition - one 100% bar under the ring,
+		// with the percentage written on every segment wide enough to hold it.
+		const shown = statuses.filter((s) => s.n);
+		if (!total) return;
+		const $share = $(`<div class="ma-share">
+			<div class="ma-share-title">${__("Share of equipment")}</div>
+			<div class="ma-share-bar"></div>
+			<div class="ma-share-list"></div>
+		</div>`).appendTo(this.$donut);
+		const $bar = $share.find(".ma-share-bar");
+		const $list = $share.find(".ma-share-list");
+		shown.forEach((s) => {
+			const share = (s.n / total) * 100;
+			$('<div class="ma-share-seg">')
+				.css({ flex: s.n, background: s.color, color: MA_LIGHT_FILLS.has(s.color) ? "#2f3b47" : "#fff" })
+				.attr("title", `${__(s.status)}: ${s.n} (${ma_pct(s.n, total)})`)
+				.text(share >= 8 ? ma_pct(s.n, total) : "")
+				.appendTo($bar);
+			$(`<div class="ma-share-item">
+				<span class="ma-legend-swatch" style="background:${s.color}"></span>
+				<span class="ma-share-label">${__(s.status)}</span>
+				<b>${ma_pct(s.n, total)}</b>
+			</div>`).appendTo($list);
 		});
 	}
 
@@ -493,9 +530,12 @@ manutencao_preditiva.MeusAchados = class MeusAchados {
 			MA_OVERVIEW_STATUSES.forEach(([status, color]) => {
 				const n = area_rows.filter((r) => r.status === status).length;
 				if (!n) return;
+				const share = (n / area_rows.length) * 100;
 				$('<div class="ma-mini-seg">')
-					.css({ width: `${(n / area_rows.length) * 100}%`, background: color })
-					.attr("title", `${__(status)}: ${n}`)
+					.css({ width: `${share}%`, background: color, color: MA_LIGHT_FILLS.has(color) ? "#2f3b47" : "#fff" })
+					.attr("title", `${__(status)}: ${n} (${ma_pct(n, area_rows.length)})`)
+					// Only where the text fits; the tooltip carries the rest.
+					.text(share >= 22 ? ma_pct(n, area_rows.length) : "")
 					.appendTo($bar);
 			});
 
